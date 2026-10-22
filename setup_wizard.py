@@ -9,8 +9,9 @@ Walks a fresh user through:
   4. Auto-detect or prompt for config.json paths
      (BL2 install, save folder, borderlands2-tool, Gibbed data)
   5. Optional clone of the external borderlands2-tool library
-  6. Smoke-test the install
-  7. Optional launch of the editor
+  6. Optional clone of Gibbed's weapon/item data dumps
+  7. Smoke-test the install
+  8. Optional launch of the editor
 
 Cross-platform (Windows / macOS / Linux). Idempotent — re-running picks up
 where the previous run left off without clobbering existing config.
@@ -61,6 +62,7 @@ CONFIG_PATH = ROOT / "config.json"
 EXAMPLE_PATH = ROOT / "config.example.json"
 REQUIREMENTS_PATH = ROOT / "requirements.txt"
 BL2_TOOL_DIR = ROOT / "borderlands2-tool"
+GIBBED_DATA_DIR = ROOT / "gibbed_data"
 VENV_DIR = ROOT / ".venv"
 
 REQUIRED_PY = (3, 8)
@@ -188,46 +190,6 @@ def step_deps(py: str) -> bool:
 # Step 4 — Configure
 # ---------------------------------------------------------------------------
 
-def _detect_steam_dir() -> str:
-    candidates: list[str] = []
-    if platform.system() == "Windows":
-        candidates = [
-            os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "Steam", "steamapps", "common", "Borderlands 2"),
-            os.path.join(os.environ.get("PROGRAMFILES", ""), "Steam", "steamapps", "common", "Borderlands 2"),
-        ]
-    elif platform.system() == "Linux":
-        home = os.path.expanduser("~")
-        candidates = [
-            os.path.join(home, ".steam", "steam", "steamapps", "common", "Borderlands 2"),
-            os.path.join(home, ".local", "share", "Steam", "steamapps", "common", "Borderlands 2"),
-        ]
-    elif platform.system() == "Darwin":
-        home = os.path.expanduser("~")
-        candidates = [os.path.join(home, "Library", "Application Support", "Steam", "steamapps", "common", "Borderlands 2")]
-    for c in candidates:
-        if c and os.path.isdir(c):
-            return c
-    return ""
-
-def _detect_save_dir() -> str:
-    if platform.system() == "Windows":
-        docs = os.path.join(os.environ.get("USERPROFILE", ""), "Documents", "My Games", "Borderlands 2", "WillowGame", "SaveData")
-        if os.path.isdir(docs):
-            for entry in sorted(os.listdir(docs)):
-                subdir = os.path.join(docs, entry)
-                if os.path.isdir(subdir) and entry.isdigit():
-                    return subdir
-    elif platform.system() == "Linux":
-        home = os.path.expanduser("~")
-        docs = os.path.join(home, ".local", "share", "aspyr-media", "borderlands 2", "willowgame", "savedata")
-        if os.path.isdir(docs):
-            for entry in sorted(os.listdir(docs)):
-                subdir = os.path.join(docs, entry)
-                if os.path.isdir(subdir):
-                    return subdir
-    return ""
-
-
 def step_config(yes: bool) -> dict:
     existing: dict = {}
     if CONFIG_PATH.exists():
@@ -238,11 +200,13 @@ def step_config(yes: bool) -> dict:
             warn(f"{CONFIG_PATH.name} exists but is malformed; rebuilding from scratch.")
             existing = {}
 
+    from config import _detect_gibbed_dir, _detect_save_dir, _detect_steam_dir
+
     detected = {
         "game_dir": _detect_steam_dir(),
         "save_dir": _detect_save_dir(),
         "borderlands2_tool_dir": str(BL2_TOOL_DIR) if (BL2_TOOL_DIR / "borderlands" / "savefile.py").exists() else "",
-        "gibbed_dir": "",
+        "gibbed_dir": _detect_gibbed_dir(),
         "backup_generations": 5,
     }
 
@@ -253,7 +217,7 @@ def step_config(yes: bool) -> dict:
             "game_dir": "Borderlands 2 install directory",
             "save_dir": "Save folder (with .sav files)",
             "borderlands2_tool_dir": "apocalyptech/borderlands2 path (leave blank to clone next step)",
-            "gibbed_dir": "Gibbed data folder (leave blank to skip; weapon codes will be unavailable)",
+            "gibbed_dir": "Gibbed data folder (leave blank to download next; required for weapon and item names)",
         }[key]
         cfg[key] = ask(label, default=current, yes=yes)
 
@@ -297,7 +261,53 @@ def step_bl2_tool(cfg: dict, yes: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Step 6 — Smoke test
+# Step 6 — Clone Gibbed weapon/item dumps if missing
+# ---------------------------------------------------------------------------
+
+GIBBED_REPO = "https://github.com/gibbed/Borderlands2Dumps.git"
+
+def step_gibbed(cfg: dict, yes: bool) -> dict:
+    from config import _is_gibbed_dir
+
+    gibbed_dir = cfg.get("gibbed_dir") or ""
+    if _is_gibbed_dir(gibbed_dir):
+        ok(f"Gibbed data ready at {gibbed_dir}")
+        return cfg
+    if _is_gibbed_dir(str(GIBBED_DATA_DIR)):
+        cfg["gibbed_dir"] = str(GIBBED_DATA_DIR)
+        CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        ok(f"Gibbed data ready at {GIBBED_DATA_DIR.relative_to(ROOT)}")
+        return cfg
+    if shutil.which("git") is None:
+        warn("git not on PATH — can't download weapon and item metadata.")
+        info("Clone manually:")
+        info(f"  git clone {GIBBED_REPO} {GIBBED_DATA_DIR}")
+        info(f"  then set 'gibbed_dir' in {CONFIG_PATH.name}")
+        return cfg
+    if not confirm(
+        f"Download Gibbed weapon/item data into {GIBBED_DATA_DIR.relative_to(ROOT)}?",
+        default_yes=True,
+        yes=yes,
+    ):
+        warn("Skipping download. Weapons and items will show without names until gibbed_dir is set.")
+        return cfg
+    info(f"Cloning {GIBBED_REPO}...")
+    try:
+        subprocess.run(["git", "clone", "--depth", "1", GIBBED_REPO, str(GIBBED_DATA_DIR)], check=True)
+    except subprocess.CalledProcessError as e:
+        err(f"git clone failed: {e}")
+        return cfg
+    if not _is_gibbed_dir(str(GIBBED_DATA_DIR)):
+        err("Clone finished, but Asset Library Manager.json is missing.")
+        return cfg
+    cfg["gibbed_dir"] = str(GIBBED_DATA_DIR)
+    CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    ok(f"Downloaded and registered at {GIBBED_DATA_DIR.relative_to(ROOT)}")
+    return cfg
+
+
+# ---------------------------------------------------------------------------
+# Step 7 — Smoke test
 # ---------------------------------------------------------------------------
 
 def step_smoke(cfg: dict, py: str) -> bool:
@@ -322,10 +332,12 @@ def step_smoke(cfg: dict, py: str) -> bool:
         warn("borderlands2-tool not found — save reading will fail.")
         all_ok = False
 
-    if cfg.get("gibbed_dir") and os.path.isdir(cfg["gibbed_dir"]):
+    from config import _is_gibbed_dir
+    if _is_gibbed_dir(cfg.get("gibbed_dir") or ""):
         ok(f"Gibbed data: {cfg['gibbed_dir']}")
     else:
-        info("Gibbed data not configured — weapon code import/export will be disabled (but everything else works).")
+        warn("Gibbed data missing — weapon and item names, and code import/export, will be unavailable.")
+        all_ok = False
 
     # Verify Flask is importable in the chosen interpreter
     try:
@@ -346,7 +358,7 @@ def step_smoke(cfg: dict, py: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Step 7 — Launch
+# Step 8 — Launch
 # ---------------------------------------------------------------------------
 
 def step_launch(py: str, yes: bool, force_launch: bool) -> None:
@@ -392,7 +404,7 @@ def main() -> int:
     args = parser.parse_args()
 
     banner()
-    TOTAL = 7
+    TOTAL = 8
 
     step(1, TOTAL, "Checking Python version")
     if not step_python():
@@ -412,7 +424,10 @@ def main() -> int:
     step(5, TOTAL, "Installing borderlands2-tool dependency")
     cfg = step_bl2_tool(cfg, yes=args.yes)
 
-    step(6, TOTAL, "Smoke test")
+    step(6, TOTAL, "Installing weapon and item metadata")
+    cfg = step_gibbed(cfg, yes=args.yes)
+
+    step(7, TOTAL, "Smoke test")
     all_ok = step_smoke(cfg, py)
 
     print()
@@ -423,7 +438,7 @@ def main() -> int:
         info("The editor will start, but some features may be unavailable until you")
         info(f"correct the warnings above (edit {CONFIG_PATH.name} or re-run this wizard).")
 
-    step(7, TOTAL, "Launch")
+    step(8, TOTAL, "Launch")
     step_launch(py, yes=args.yes, force_launch=args.launch)
     return 0
 

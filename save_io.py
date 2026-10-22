@@ -463,6 +463,19 @@ def wrap_item_info(value: dict[str, Any]) -> bytes:
     return wrap_item(value["is_weapon"], parts, value["key"])
 
 
+def _sanitize_item_values(is_weapon: int, item_values: list[Optional[int]]) -> list:
+    """Drop parts the game's balance list rejects. Weapons are left alone.
+
+    A level change rewrites the serial, and the game deletes the whole item
+    on load if any part is not on that list. Grenade mods are the case that
+    showed up: Child Count on a Storm Front, and no prefix or title.
+    """
+    if is_weapon:
+        return item_values
+    import asset_db
+    return asset_db.get_db().sanitize_item_values(item_values)
+
+
 def is_fake_item(is_weapon: int, item_values: list[Optional[int]]) -> bool:
     """Check if this is a 'virtual' DLC data item, not a real item."""
     return item_values[0] == 255 and all(val == 0 for val in item_values[1:] if val is not None)
@@ -1759,6 +1772,7 @@ def set_item_level(filename: str, field: int, index: int, new_level: int) -> boo
     # Project Paris Bug 7: grade_index was capped at 80 but patched exe supports higher
     item_values[4] = new_level
     item_values[5] = new_level
+    item_values = _sanitize_item_values(is_weapon, item_values)
     sub[1][0][1] = wrap_item(is_weapon, item_values, key)
     entry[1] = write_protobuf(sub)
     write_save(filename, player)
@@ -1908,6 +1922,7 @@ def bulk_set_level(filename: str, field: int, new_level: int) -> int:
             continue
         item_values[4] = new_level
         item_values[5] = new_level
+        item_values = _sanitize_item_values(is_weapon, item_values)
         sub[1][0][1] = wrap_item(is_weapon, item_values, key)
         entry[1] = write_protobuf(sub)
         count += 1

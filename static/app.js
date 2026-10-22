@@ -1793,16 +1793,16 @@ const WEAPON_SLOTS = {
 };
 
 const ITEM_SLOTS = {
-    keys: ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "material"],
-    apiSlotNames: { alpha: "alpha", beta: "beta", gamma: "gamma", delta: "delta", epsilon: "epsilon", zeta: "zeta", eta: "eta", theta: "theta", material: "material" },
-    // Friendly labels per item category
+    keys: ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "material", "prefix", "title"],
+    apiSlotNames: { alpha: "alpha", beta: "beta", gamma: "gamma", delta: "delta", epsilon: "epsilon", zeta: "zeta", eta: "eta", theta: "theta", material: "material", prefix: "prefix", title: "title" },
+    // Slot order is the serial order. Grenade alpha is the payload.
     labelsByCategory: {
-        "Shield": { alpha: "Body (Capacity)", beta: "Battery (Recharge)", gamma: "Capacitor (Delay)", delta: "Accessory (Special)", epsilon: "Part 5", zeta: "Part 6", eta: "Part 7", theta: "Part 8", material: "Material" },
-        "Grenade Mod": { alpha: "Delivery (Longbow/MIRV)", beta: "Blast Radius", gamma: "Child Count", delta: "Element Accessory", epsilon: "Part 5", zeta: "Part 6", eta: "Part 7", theta: "Part 8", material: "Material" },
-        "Class Mod": { alpha: "Specialty", beta: "Primary Stat", gamma: "Secondary Stat", delta: "Tertiary Stat", epsilon: "Part 5", zeta: "Part 6", eta: "Part 7", theta: "Part 8", material: "Material" },
-        "Relic": { alpha: "Primary Effect", beta: "Secondary Effect", gamma: "Bonus", delta: "Accessory", epsilon: "Part 5", zeta: "Part 6", eta: "Part 7", theta: "Part 8", material: "Material" },
+        "Shield": { alpha: "Body (Capacity)", beta: "Battery (Recharge)", gamma: "Capacitor (Delay)", delta: "Accessory (Special)", epsilon: "Part 5", zeta: "Part 6", eta: "Part 7", theta: "Part 8", material: "Material", prefix: "Prefix", title: "Title" },
+        "Grenade Mod": { alpha: "Payload", beta: "Delivery", gamma: "Trigger", delta: "Element", epsilon: "Damage", zeta: "Blast Radius", eta: "Child Count", theta: "Status Damage", material: "Material", prefix: "Prefix", title: "Title" },
+        "Class Mod": { alpha: "Specialty", beta: "Primary Stat", gamma: "Secondary Stat", delta: "Tertiary Stat", epsilon: "Part 5", zeta: "Part 6", eta: "Part 7", theta: "Part 8", material: "Material", prefix: "Prefix", title: "Title" },
+        "Relic": { alpha: "Primary Effect", beta: "Secondary Effect", gamma: "Bonus", delta: "Accessory", epsilon: "Part 5", zeta: "Part 6", eta: "Part 7", theta: "Part 8", material: "Material", prefix: "Prefix", title: "Title" },
     },
-    partIdxMap: ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Material"],
+    partIdxMap: ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Material", "Prefix", "Title"],
     apiKind: "item"
 };
 
@@ -1810,7 +1810,7 @@ const ITEM_SLOTS = {
 const ITEM_TO_BACKEND_SLOT = {
     alpha: "body", beta: "grip", gamma: "barrel", delta: "sight",
     epsilon: "stock", zeta: "elemental", eta: "accessory1", theta: "accessory2",
-    material: "material"
+    material: "material", prefix: "prefix", title: "title"
 };
 
 async function openWeaponEditor(item) {
@@ -2026,32 +2026,69 @@ async function openWeaponEditor(item) {
         sel.addEventListener("change", updateCompatWarning);
     }
 
-    // Single batch API call for all slots instead of N individual calls
-    var apiSlots = slots.map(function(slot) {
-        return isWeapon ? slot : (slotConfig.apiSlotNames ? slotConfig.apiSlotNames[slot] : slot);
-    });
-    api("/api/assets/all-parts-batch?kind=" + apiKind + "&slots=" + encodeURIComponent(apiSlots.join(",")))
-        .then(function(allParts) {
-            for (var si = 0; si < slots.length; si++) {
-                var slot = slots[si];
-                var apiSlot = apiSlots[si];
-                var parts = allParts[apiSlot];
-                if (parts && parts.length > 0) {
-                    _populateSlot(slot, parts);
-                } else {
-                    var sel = document.getElementById("ew-" + slot);
-                    if (sel) sel.innerHTML = '<option value="__keep__">(Keep Current)</option>';
-                }
-            }
-            submitBtn.disabled = false;
-            submitBtn.textContent = "SAVE CHANGES";
-            updateCompatWarning();
-        })
-        .catch(function() {
-            // Fallback: leave all slots as "Keep Current"
-            submitBtn.disabled = false;
-            submitBtn.textContent = "SAVE CHANGES";
+    function _finishPartLoad() {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "SAVE CHANGES";
+        updateCompatWarning();
+    }
+
+    function _loadEveryPart() {
+        var apiSlots = slots.map(function(slot) {
+            return isWeapon ? slot : (slotConfig.apiSlotNames ? slotConfig.apiSlotNames[slot] : slot);
         });
+        api("/api/assets/all-parts-batch?kind=" + apiKind + "&slots=" + encodeURIComponent(apiSlots.join(",")))
+            .then(function(allParts) {
+                for (var si = 0; si < slots.length; si++) {
+                    var slot = slots[si];
+                    var parts = allParts[apiSlots[si]];
+                    if (parts && parts.length > 0) {
+                        _populateSlot(slot, parts);
+                    } else {
+                        var sel = document.getElementById("ew-" + slot);
+                        if (sel) sel.innerHTML = '<option value="__keep__">(Keep Current)</option>';
+                    }
+                }
+                _finishPartLoad();
+            })
+            .catch(function() {
+                _finishPartLoad();
+            });
+    }
+
+    // Items use the balance list. A slot that list omits is not a real part
+    // (Storm Front has no Child Count); offering every part of that type is
+    // what the game deletes on load. Prefix and title stay as they are and
+    // the server fills them from the installed parts.
+    if (!isWeapon && balancePath) {
+        api("/api/assets/item-parts?balance=" + encodeURIComponent(balancePath))
+            .then(function(slotInfo) {
+                for (var si = 0; si < slots.length; si++) {
+                    var slot = slots[si];
+                    var info = slotInfo[slot];
+                    var sel = document.getElementById("ew-" + slot);
+                    if (info && info.parts && info.parts.length) {
+                        _populateSlot(slot, info.parts);
+                    } else if (slot === "prefix" || slot === "title") {
+                        if (sel) sel.innerHTML = '<option value="__keep__">(Keep Current)</option>';
+                    } else if (sel) {
+                        // Empty already. Leave it. A part in a disabled slot is
+                        // what gets the item deleted, so clear that one.
+                        if (sel.dataset.current) {
+                            sel.innerHTML = '<option value="none">None</option>';
+                            sel.value = "none";
+                        } else {
+                            sel.innerHTML = '<option value="__keep__">(No Change)</option>';
+                        }
+                    }
+                }
+                _finishPartLoad();
+            })
+            .catch(function() {
+                _loadEveryPart();
+            });
+    } else {
+        _loadEveryPart();
+    }
 }
 
 document.getElementById("btn-edit-submit").addEventListener("click", async () => {
@@ -2069,7 +2106,7 @@ document.getElementById("btn-edit-submit").addEventListener("click", async () =>
     // Collect changed parts — map item slot names back to backend slot names
     const slotKeys = editorIsWeapon
         ? ["body", "grip", "barrel", "sight", "stock", "elemental", "accessory1", "accessory2", "material"]
-        : ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "material"];
+        : ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "material", "prefix", "title"];
 
     const parts = {};
     for (const slot of slotKeys) {
@@ -2830,17 +2867,20 @@ document.getElementById("add-item-balance").addEventListener("change", async () 
     try {
         var parts = await api("/api/assets/item-parts?balance=" + encodeURIComponent(bp));
         pg.innerHTML = "";
-        for (var slot in parts) {
-            var opts = parts[slot];
+        var slotOrder = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "material"];
+        for (var si = 0; si < slotOrder.length; si++) {
+            var slotId = slotOrder[si];
+            var info = parts[slotId];
+            var opts = info && info.parts;
             if (!opts || !opts.length) continue;
             var label = document.createElement("label");
-            label.textContent = slot;
+            label.textContent = info.label || slotId;
             var sel = document.createElement("select");
-            sel.id = "add-item-part-" + slot.toLowerCase().replace(/[\s\/]+/g, "-");
-            sel.dataset.slot = slot.toLowerCase().replace(/[\s\/]+/g, "-");
+            sel.id = "add-item-part-" + slotId;
+            sel.dataset.slot = slotId;
             sel.innerHTML = '<option value="">None</option>';
             for (var p of opts) { var o = document.createElement("option"); o.value = p.path; o.textContent = p.name; sel.appendChild(o); }
-            if (opts.length > 0) sel.value = opts[0].path;
+            sel.value = opts[0].path;
             label.appendChild(sel);
             pg.appendChild(label);
         }
@@ -2854,13 +2894,7 @@ document.getElementById("btn-add-item-submit").addEventListener("click", async (
     var parts = {};
     document.querySelectorAll("#add-item-parts-grid select").forEach(function(sel) {
         if (sel.value) {
-            // Map display slot names back to alpha/beta/gamma etc.
-            var slotMap = {"body": "alpha", "battery-grip": "beta", "battery/grip": "beta",
-                           "capacitor-barrel": "gamma", "capacitor/barrel": "gamma",
-                           "accessory": "delta", "accessory-2": "epsilon",
-                           "slot-6": "zeta", "slot-7": "eta", "slot-8": "theta", "material": "material"};
-            var key = sel.dataset.slot || "";
-            parts[slotMap[key] || key] = sel.value;
+            parts[sel.dataset.slot] = sel.value;
         }
     });
     try {

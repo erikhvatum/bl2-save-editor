@@ -71,6 +71,39 @@ ITEM_TYPE_CATEGORIES = {
     "MissionItem": "Mission Item",
 }
 
+# Gameplay part order inside an item serial. Prefix and title follow these.
+ITEM_GAMEPLAY_SLOTS = (
+    "alpha", "beta", "gamma", "delta", "epsilon",
+    "zeta", "eta", "theta", "material",
+)
+
+# Labels match the part lists in Items.json. Grenade alpha is the payload,
+# not the delivery; the old shield-shaped names wrote parts into the wrong slots.
+ITEM_SLOT_LABELS = {
+    "Grenade Mod": {
+        "alpha": "Payload", "beta": "Delivery", "gamma": "Trigger",
+        "delta": "Element", "epsilon": "Damage", "zeta": "Blast Radius",
+        "eta": "Child Count", "theta": "Status Damage", "material": "Material",
+    },
+    "Shield": {
+        "alpha": "Body", "beta": "Battery", "gamma": "Capacitor",
+        "delta": "Accessory", "epsilon": "Accessory 2", "zeta": "Slot 6",
+        "eta": "Slot 7", "theta": "Slot 8", "material": "Material",
+    },
+    "Class Mod": {
+        "alpha": "Specialty", "beta": "Primary Stat", "gamma": "Secondary Stat",
+        "delta": "Tertiary Stat", "epsilon": "Part 5", "zeta": "Part 6",
+        "eta": "Part 7", "theta": "Part 8", "material": "Material",
+    },
+    "Relic": {
+        "alpha": "Primary Effect", "beta": "Secondary Effect", "gamma": "Bonus",
+        "delta": "Accessory", "epsilon": "Part 5", "zeta": "Part 6",
+        "eta": "Part 7", "theta": "Part 8", "material": "Material",
+    },
+}
+
+_ELEMENT_WORDS = ("Corrosive", "Incendiary", "Shock", "Slag", "Explosive", "Cryo")
+
 # Element names from part paths
 ELEMENT_NAMES = {
     "Incendiary": "Fire", "Fire": "Fire",
@@ -182,16 +215,21 @@ class AssetDB:
         self._weapon_part_lists: dict[str, list[str]] = {}
         self._item_types: dict[str, Any] = {}
         self._item_parts: dict[str, Any] = {}
+        self._item_part_lists: dict[str, Any] = {}
         self._item_balance: dict[str, Any] = {}
+        self._item_balance_parts: dict[str, Any] = {}
         self._balance_categories: dict[str, str] = {}
         self._item_parts_by_type: dict[str, list[tuple[str, dict]]] = {}
+        self._item_name_parts: dict[str, Any] = {}
         self._load()
+        # Loaded outside the sqlite cache so a fresh cache still sees name text.
+        self._item_name_parts = self._load_json("Item Name Parts.json")
 
     def _load_json(self, filename: str) -> dict[str, Any]:
         path = os.path.join(GIBBED_DIR, filename)
         if not os.path.exists(path):
             return {}
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:
             return json.load(f)
 
     def _cache_path(self) -> str:
@@ -227,7 +265,9 @@ class AssetDB:
             "weapon_part_lists": self._weapon_part_lists,
             "item_types": self._item_types,
             "item_parts": self._item_parts,
+            "item_part_lists": self._item_part_lists,
             "item_balance": self._item_balance,
+            "item_balance_parts": self._item_balance_parts,
             "balance_categories": self._balance_categories,
         }
         for key, data in tables.items():
@@ -252,7 +292,9 @@ class AssetDB:
             self._weapon_part_lists = pickle.loads(rows["weapon_part_lists"])
             self._item_types = pickle.loads(rows["item_types"])
             self._item_parts = pickle.loads(rows["item_parts"])
+            self._item_part_lists = pickle.loads(rows["item_part_lists"])
             self._item_balance = pickle.loads(rows["item_balance"])
+            self._item_balance_parts = pickle.loads(rows["item_balance_parts"])
             self._balance_categories = pickle.loads(rows["balance_categories"])
             self._build_item_parts_index()
             return True
@@ -291,7 +333,9 @@ class AssetDB:
         self._weapon_part_lists = self._load_json("Weapon Part Lists.json")
         self._item_types = self._load_json("Items.json")
         self._item_parts = self._load_json("Item Parts.json")
+        self._item_part_lists = self._load_json("Item Part Lists.json")
         self._item_balance = self._load_json("Item Balance.json")
+        self._item_balance_parts = self._load_json("Item Balance Part Lists.json")
         self._build_balance_categories()
         self._build_item_parts_index()
 
@@ -504,6 +548,8 @@ class AssetDB:
             "Mat_", "Accessory_", "Elemental_",
             "Prefix_Barrel_", "Prefix_Grip_", "Prefix_",
             "Title_Legendary_", "Title_Unique_", "Title__", "Title_",
+            "Payload_", "Delivery_", "Trigger_", "DamageRadius_",
+            "ChildCount_", "StatusDamage_",
         ]
         for p in prefixes:
             if short.startswith(p):
@@ -523,19 +569,10 @@ class AssetDB:
             if p["slot"] == "Prefix" and p["path"]:
                 prefix_path = p["path"]
 
-        title_text = ""
-        if title_path:
-            npi = self._weapon_name_parts.get(title_path, {})
-            title_text = npi.get("name", "")
-            if not title_text:
-                title_text = self._clean_part_name(title_path, "Title")
-
-        prefix_text = ""
-        if prefix_path:
-            npi = self._weapon_name_parts.get(prefix_path, {})
-            prefix_text = npi.get("name", "")
-            if not prefix_text:
-                prefix_text = ""
+        title_text = self._name_part_text(title_path) if title_path else ""
+        if title_path and not title_text:
+            title_text = self._clean_part_name(title_path, "Title")
+        prefix_text = self._name_part_text(prefix_path) if prefix_path else ""
 
         if prefix_text and title_text:
             return f"{prefix_text} {title_text}"
@@ -683,8 +720,37 @@ class AssetDB:
         result.sort(key=lambda x: (x["rarity"]["rank"], x["name"]))
         return result
 
+    def _coerce_part_list(self, slot_data: Any, catalogs: dict[str, Any]) -> list[str]:
+        """Normalize a Gibbed slot value into a list of part paths.
+
+        Dumps store a slot as a list of paths, a name of a part-list entry,
+        or an older object of the form {"parts": ...}.
+        """
+        if isinstance(slot_data, list):
+            return [p for p in slot_data if isinstance(p, str)]
+        if isinstance(slot_data, str):
+            listed = catalogs.get(slot_data)
+            if isinstance(listed, list):
+                return [p for p in listed if isinstance(p, str)]
+            return []
+        if isinstance(slot_data, dict):
+            return self._coerce_part_list(slot_data.get("parts"), catalogs)
+        return []
+
+    def _merge_part_slot(self, slots: dict[str, list[str]], slot: str, parts: list[str], mode: str) -> None:
+        if not parts:
+            return
+        if mode in ("Selective", "Complete") or slot not in slots:
+            slots[slot] = list(parts)
+            return
+        existing = set(slots[slot])
+        for part in parts:
+            if part not in existing:
+                slots[slot].append(part)
+                existing.add(part)
+
     def get_parts_for_balance(self, balance_path: str) -> dict[str, list[dict[str, str]]]:
-        part_slots = {}
+        part_slots: dict[str, list[str]] = {}
         chain = []
         visited = set()
         path = balance_path
@@ -700,27 +766,14 @@ class AssetDB:
             if not parts_ref:
                 continue
             bpl = self._weapon_balance_parts.get(parts_ref, {})
+            if not isinstance(bpl, dict):
+                continue
             mode = bpl.get("mode", "Additive")
             for slot in ["body", "grip", "barrel", "sight", "stock",
                          "elemental", "accessory1", "accessory2",
                          "material", "prefix", "title"]:
-                slot_data = bpl.get(slot)
-                if slot_data is None:
-                    continue
-                part_list_ref = slot_data if isinstance(slot_data, str) else slot_data.get("parts", slot_data)
-                if isinstance(part_list_ref, str):
-                    parts = self._weapon_part_lists.get(part_list_ref, [])
-                elif isinstance(part_list_ref, list):
-                    parts = part_list_ref
-                else:
-                    continue
-                if mode == "Selective" or slot not in part_slots:
-                    part_slots[slot] = parts
-                else:
-                    existing = set(part_slots[slot])
-                    for p in parts:
-                        if p not in existing:
-                            part_slots[slot].append(p)
+                parts = self._coerce_part_list(bpl.get(slot), self._weapon_part_lists)
+                self._merge_part_slot(part_slots, slot, parts, mode)
         result = {}
         for slot, parts in part_slots.items():
             result[slot] = [{"path": p, "name": self._clean_part_name(p, slot)} for p in parts]
@@ -882,39 +935,250 @@ class AssetDB:
         results.sort(key=lambda x: (x["rarity"]["rank"], x["name"]))
         return results
 
-    def get_item_parts_for_balance(self, balance_path: str) -> dict[str, list[dict[str, str]]]:
-        """Get available parts for an item balance, resolving through part lists."""
-        bal_data = self._item_balance.get(balance_path, {})
-        item_ref = bal_data.get("item", "")
-        item_data = self._item_types.get(item_ref, {})
+    def _item_part_none(self) -> int:
+        cfg = CONFIGS["ItemParts"]
+        return (1 << (cfg["sublibrary_bits"] + cfg["asset_bits"])) - 1
 
-        # Item parts are named alpha_parts, beta_parts, etc.
-        slot_names = {
-            "alpha": "Body", "beta": "Battery/Grip", "gamma": "Capacitor/Barrel",
-            "delta": "Accessory", "epsilon": "Accessory 2", "zeta": "Slot 6",
-            "eta": "Slot 7", "theta": "Slot 8", "material": "Material",
-        }
-        result = {}
-        # Check item_data for part lists
-        for slot_key, display_name in slot_names.items():
-            parts_ref = item_data.get(f"{slot_key}_parts", "")
-            if not parts_ref:
+    def _resolve_packed(self, set_id: int, group: str, packed: Optional[int]) -> Optional[str]:
+        if packed is None:
+            return None
+        cfg = CONFIGS.get(group)
+        if not cfg:
+            return None
+        bits = cfg["asset_bits"]
+        lib = packed >> bits
+        asset = packed & ((1 << bits) - 1)
+        return self.resolve_path(set_id, group, lib, asset)
+
+    def _pack_item_part(self, path: Optional[str]) -> Optional[int]:
+        if not path:
+            return None
+        ref = self.pack_reference(path, "ItemParts")
+        if not ref:
+            return None
+        return (ref[0] << CONFIGS["ItemParts"]["asset_bits"]) | ref[1]
+
+    def _name_part_text(self, path: str) -> str:
+        for table in (self._item_name_parts, self._weapon_name_parts):
+            info = table.get(path) or {}
+            name = info.get("name") if isinstance(info, dict) else None
+            if isinstance(name, str) and name:
+                return name
+        return ""
+
+    def _balance_chain(self, balance_path: str) -> list[str]:
+        chain: list[str] = []
+        visited: set[str] = set()
+        path: Optional[str] = balance_path
+        while path and path not in visited:
+            visited.add(path)
+            chain.append(path)
+            parent = self._item_balance.get(path, {}).get("base")
+            path = parent if isinstance(parent, str) else None
+        chain.reverse()
+        return chain
+
+    def _item_part_paths_for_balance(self, balance_path: str) -> tuple[dict[str, list[str]], str]:
+        """Parts the game's balance list allows, keyed by alpha..material.
+
+        A Complete list is the whole definition: slots it does not name are
+        disabled and must be the empty part (65535). Filling those from the
+        item type is what put Child Count on a Storm Front, which the game
+        deletes on load. Selective and Additive lists still inherit, and a
+        slot nobody mentioned falls back to the item type (shield bodies).
+        """
+        part_slots: dict[str, list[str]] = {}
+        item_ref = ""
+        saw_complete = False
+        for bp in self._balance_chain(balance_path):
+            bal_data = self._item_balance.get(bp, {})
+            if isinstance(bal_data.get("item"), str) and bal_data["item"]:
+                item_ref = bal_data["item"]
+            parts_ref = bal_data.get("parts", "")
+            bpl = self._item_balance_parts.get(parts_ref, {}) if isinstance(parts_ref, str) else {}
+            if not isinstance(bpl, dict) or not bpl:
                 continue
-            # Resolve part list
-            parts = self._resolve_item_part_list(parts_ref, slot_key)
-            if parts:
-                result[display_name] = [{"path": p, "name": self._clean_part_name(p, slot_key)} for p in parts]
+            if isinstance(bpl.get("item"), str) and bpl["item"]:
+                item_ref = bpl["item"]
+            mode = bpl.get("mode", "Additive")
+            if mode == "Complete":
+                part_slots = {}
+                saw_complete = True
+            for slot_key in ITEM_GAMEPLAY_SLOTS:
+                parts = self._coerce_part_list(bpl.get(slot_key), self._item_part_lists)
+                self._merge_part_slot(part_slots, slot_key, parts, mode)
 
-        # Also check balance-level parts override
-        bal_parts_ref = bal_data.get("parts", "")
-        if bal_parts_ref and isinstance(bal_parts_ref, str):
-            # Sometimes the balance has a single part list that overrides
-            for slot_key, display_name in slot_names.items():
-                if display_name not in result:
-                    parts = self._resolve_item_part_list(bal_parts_ref, slot_key)
+        if not saw_complete:
+            item_data = self._item_types.get(item_ref, {})
+            if isinstance(item_data, dict):
+                for slot_key in ITEM_GAMEPLAY_SLOTS:
+                    if slot_key in part_slots:
+                        continue
+                    parts_ref = item_data.get(f"{slot_key}_parts", "")
+                    parts = self._coerce_part_list(parts_ref, self._item_part_lists)
+                    if not parts and isinstance(parts_ref, str) and parts_ref:
+                        parts = self._resolve_item_part_list(parts_ref, slot_key)
                     if parts:
-                        result[display_name] = [{"path": p, "name": self._clean_part_name(p, slot_key)} for p in parts]
+                        part_slots[slot_key] = parts
+        return part_slots, item_ref
 
+    def _collect_name_parts(self, part_paths: list[str], item_ref: str) -> tuple[list[str], list[str]]:
+        """Prefix and title paths attached to the installed parts and item."""
+        prefixes: list[str] = []
+        titles: list[str] = []
+
+        def add(source: Any, dest: list[str]) -> None:
+            if not isinstance(source, list):
+                return
+            for entry in source:
+                if isinstance(entry, str) and entry not in dest:
+                    dest.append(entry)
+
+        sources: list[dict] = []
+        for part_path in part_paths:
+            data = self._item_parts.get(part_path)
+            if isinstance(data, dict):
+                sources.append(data)
+        item = self._item_types.get(item_ref)
+        if isinstance(item, dict):
+            sources.append(item)
+        for data in sources:
+            add(data.get("prefixes"), prefixes)
+            add(data.get("titles"), titles)
+        return prefixes, titles
+
+    def _element_from_paths(self, part_paths: list[str]) -> Optional[str]:
+        for part_path in part_paths:
+            short = part_path.rsplit(".", 1)[-1].lower()
+            for word in _ELEMENT_WORDS:
+                if word.lower() in short:
+                    return word
+        return None
+
+    def _choose_name_part(self, options: list[str], manufacturer: Optional[str],
+                          element: Optional[str], prefer_element: bool) -> Optional[str]:
+        if not options:
+            return None
+        bandit = (manufacturer or "").rsplit(".", 1)[-1] == "Bandit"
+
+        def score(path: str) -> int:
+            name = path.rsplit(".", 1)[-1]
+            points = 2 if bandit == name.endswith("_Bandit") else 0
+            if prefer_element and element and element.lower() in name.lower():
+                points += 4
+            return points
+
+        best = max(range(len(options)), key=lambda i: (score(options[i]), -i))
+        return options[best]
+
+    def _path_has_element(self, path: Optional[str], element: Optional[str]) -> bool:
+        if not path or not element:
+            return False
+        return element.lower() in path.rsplit(".", 1)[-1].lower()
+
+    def sanitize_item_values(self, values: list) -> list:
+        """Make a non-weapon serial pass the game's part-list check.
+
+        Disabled slots become the empty part. A part sitting in a slot the
+        balance does not allow is replaced. Prefix and title are filled from
+        the parts that are actually installed, which is what a dropped
+        grenade stores. Legal items are returned unchanged.
+        """
+        if not values or len(values) < 6:
+            return values
+        values = list(values)
+        while len(values) < 17:
+            values.append(None)
+        set_id = values[0] or 0
+        balance_path = self._resolve_packed(set_id, "BalanceDefs", values[2])
+        if not balance_path:
+            return values
+        legal, item_ref = self._item_part_paths_for_balance(balance_path)
+        if not legal and not item_ref:
+            return values
+        none = self._item_part_none()
+        installed: list[str] = []
+        disabled_positions: set[int] = set()
+        for index, slot in enumerate(ITEM_GAMEPLAY_SLOTS):
+            pos = 6 + index
+            current = values[pos]
+            allowed = legal.get(slot)
+            if allowed is None:
+                disabled_positions.add(pos)
+                if current not in (None, none):
+                    values[pos] = none
+                continue
+            if current in (None, none):
+                continue
+            path = self._resolve_packed(set_id, "ItemParts", current)
+            if path in allowed:
+                installed.append(path)
+                continue
+            packed = self._pack_item_part(allowed[0])
+            values[pos] = packed if packed is not None else none
+            if packed is not None:
+                installed.append(allowed[0])
+
+        prefixes, titles = self._collect_name_parts(installed, item_ref)
+        manufacturer = self._resolve_packed(set_id, "Manufacturers", values[3])
+        element = self._element_from_paths(installed)
+        title = self._choose_name_part(titles, manufacturer, element, True)
+        # The element is already in titles like "Storm Front". Prefer the
+        # delivery prefix ("Homing") unless the title does not name it,
+        # which is how Fastball puts "Shock" in the prefix.
+        prefix = self._choose_name_part(
+            prefixes, manufacturer, element,
+            not self._path_has_element(title, element),
+        )
+        self._ensure_name_part(values, set_id, 15, prefixes, prefix, none, disabled_positions)
+        self._ensure_name_part(values, set_id, 16, titles, title, none, disabled_positions)
+        return values
+
+    def _ensure_name_part(self, values: list, set_id: int, pos: int,
+                          options: list[str], chosen: Optional[str], none: int,
+                          disabled_positions: set[int]) -> None:
+        if not options or not chosen:
+            return
+        current = values[pos]
+        if current not in (None, none):
+            path = self._resolve_packed(set_id, "ItemParts", current)
+            if path in options:
+                return
+        packed = self._pack_item_part(chosen)
+        if packed is None:
+            return
+        # Only disabled slots may be padded, and only when that lets the
+        # name part pack. None in a slot the balance uses means the serial
+        # ended there; writing past it would change a working relic.
+        trial = list(values)
+        for earlier in range(6, pos):
+            if trial[earlier] is None and earlier in disabled_positions:
+                trial[earlier] = none
+        if any(trial[earlier] is None for earlier in range(6, pos)):
+            return
+        for earlier in range(6, pos):
+            values[earlier] = trial[earlier]
+        values[pos] = packed
+
+    def get_item_parts_for_balance(self, balance_path: str) -> dict[str, dict[str, Any]]:
+        """Parts a balance can roll, keyed by alpha..material.
+
+        Each value is {"label", "parts": [{"path", "name"}]}. Slots a
+        Complete list omits are absent; the editor writes the empty part
+        there instead of offering the item type's full list.
+        """
+        part_slots, item_ref = self._item_part_paths_for_balance(balance_path)
+        category = self.detect_item_category(item_ref, balance_path)
+        labels = ITEM_SLOT_LABELS.get(category, {})
+        result: dict[str, dict[str, Any]] = {}
+        for slot_key in ITEM_GAMEPLAY_SLOTS:
+            parts = part_slots.get(slot_key) or []
+            if not parts:
+                continue
+            result[slot_key] = {
+                "label": labels.get(slot_key, slot_key),
+                "parts": [{"path": p, "name": self._clean_part_name(p, slot_key)} for p in parts],
+            }
         return result
 
     def _resolve_item_part_list(self, parts_ref: str, slot_key: str) -> list[str]:

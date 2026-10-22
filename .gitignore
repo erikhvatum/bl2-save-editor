@@ -19,6 +19,9 @@ build/
 # Config (contains user-specific paths)
 config.json
 
+# Gibbed item/weapon dumps. The setup wizard clones these locally.
+gibbed_data/
+
 # IDE / tool state
 .vscode/
 .idea/
