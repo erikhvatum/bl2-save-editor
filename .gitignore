@@ -45,3 +45,6 @@ UmodelSaved/
 
 # Memory directory used by Claude Code agent
 memory/
+# Local dependencies and derived asset caches
+borderlands2-tool/
+.asset_cache.sqlite
