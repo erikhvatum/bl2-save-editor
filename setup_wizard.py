@@ -375,6 +375,8 @@ def step_launch(py: str, yes: bool, force_launch: bool) -> None:
         print(bold("To start the editor later:"))
         if platform.system() == "Windows":
             print(f"  {cyan('start_editor.bat')}")
+        else:
+            print(f"  {cyan('./start_editor.command')}")
         print(f"  {cyan(f'{py} app.py')}")
         return
 

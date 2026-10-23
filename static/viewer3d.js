@@ -192,7 +192,21 @@ function _loadGestaltData(callback) {
 // Preload gestalt data on script load
 _loadGestaltData();
 
+function _groupIsProcedural(group) {
+    if (!group) return false;
+    if (group.userData && group.userData._procedural) return true;
+    var found = false;
+    if (group.traverse) {
+        group.traverse(function(node) {
+            if (node.userData && node.userData._procedural) found = true;
+        });
+    }
+    return found;
+}
+
 function applyGestaltSectionVisibility(group, weaponType, partPaths) {
+    // Procedural stand-ins are not gestalt meshes. Section groups would hide them.
+    if (_groupIsProcedural(group)) return;
     if (!group || !_gestaltMap || !_partMeshNames) return;
     if (!partPaths || !partPaths.length) return;
 
@@ -310,6 +324,7 @@ var _GESTALT_SLOTS = {
 };
 
 function applyGestaltManufacturerFallback(group, weaponType, manufacturer) {
+    if (_groupIsProcedural(group)) return;
     if (!group || !_gestaltMap || !manufacturer) return;
     var gestaltKey = weaponType.replace(/ /g, "_");
     if (gestaltKey === "Grenade_Mod") gestaltKey = "Grenade";
@@ -959,6 +974,7 @@ function applyCharacterTint(group, r, g, b) {
             if (p.userData && p.userData._micHeadApplied) return;
             p = p.parent;
         }
+        if (child.userData && child.userData._keepColor) return;
         if (child.isMesh && child.material) {
             var mats = Array.isArray(child.material) ? child.material : [child.material];
             for (var i = 0; i < mats.length; i++) {
@@ -1191,6 +1207,7 @@ function applySkinColors(group, zones) {
         if (subgroup.userData && subgroup.userData._micHeadApplied) return;
         subgroup.traverse(function(child) {
             if (!child.isMesh || !child.material) return;
+            if (child.userData && child.userData._keepColor) return;
             var mats = Array.isArray(child.material) ? child.material : [child.material];
             for (var idx = 0; idx < mats.length; idx++) {
                 var mat = mats[idx];
@@ -1474,6 +1491,265 @@ THREE.BL2InkShader = {
     ].join("\n"),
 };
 
+// ─── Procedural stand-ins ─────────────────────────────────
+// Extracted glTF lives in gitignored static/models. When those files are
+// absent, the viewports still get a rarity-tinted silhouette.
+// Camera for every viewer sits on +z looking toward the origin, so a face,
+// shield, or gun side that should be visible is built toward +z.
+// Local +Y on CylinderGeometry. Rz(-PI/2) maps (0,1,0) onto (1,0,0)
+// (barrel points to the viewer's right). Rx(+PI/2) maps (0,1,0) onto (0,0,1)
+// (a disc's cap faces the camera).
+
+var CLASS_SILHOUETTE = {
+    "Axton":    { build: "average", suit: 0x3e4a30, accent: 0xf0a030, skin: 0xc48a6a },
+    "Zer0":     { build: "slim",    suit: 0x3a445c, accent: 0x4b8be8, skin: 0x3a445c },
+    "Maya":     { build: "average", suit: 0x3a2456, accent: 0xb06ad4, skin: 0xc48a6a },
+    "Salvador": { build: "stocky",  suit: 0x6e2c24, accent: 0xe05040, skin: 0xa86b45 },
+    "Gaige":    { build: "average", suit: 0x3a2430, accent: 0xff4081, skin: 0xe0b090 },
+    "Krieg":    { build: "bulky",   suit: 0x6a4a34, accent: 0xe8a33a, skin: 0xc48a6a },
+};
+
+var BUILD_SCALE = {
+    slim:    { w: 0.78, h: 1.08 },
+    average: { w: 1.00, h: 1.00 },
+    stocky:  { w: 1.28, h: 0.82 },
+    bulky:   { w: 1.38, h: 1.02 },
+};
+
+var GUN_PROFILE = {
+    "Pistol":          { stock: 0.00, body: 0.34, mag: 0.12, barrel: 0.22, barrelR: 0.028, scope: 0,    fat: 0.10 },
+    "Assault Rifle":   { stock: 0.28, body: 0.46, mag: 0.22, barrel: 0.42, barrelR: 0.030, scope: 0.12, fat: 0.11 },
+    "SMG":             { stock: 0.12, body: 0.32, mag: 0.26, barrel: 0.20, barrelR: 0.026, scope: 0,    fat: 0.10 },
+    "Shotgun":         { stock: 0.26, body: 0.40, mag: 0.08, barrel: 0.48, barrelR: 0.055, scope: 0,    fat: 0.13 },
+    "Sniper Rifle":    { stock: 0.32, body: 0.40, mag: 0.14, barrel: 0.85, barrelR: 0.026, scope: 0.24, fat: 0.12 },
+    "Rocket Launcher": { stock: 0.10, body: 0.50, mag: 0.00, barrel: 0.70, barrelR: 0.090, scope: 0.10, fat: 0.16 },
+};
+
+function _phMat(hex, opts) {
+    opts = opts || {};
+    return new THREE.MeshStandardMaterial({
+        color: new THREE.Color(hex),
+        metalness: opts.metalness != null ? opts.metalness : 0.45,
+        roughness: opts.roughness != null ? opts.roughness : 0.42,
+        emissive: new THREE.Color(opts.emissive != null ? opts.emissive : 0x000000),
+        emissiveIntensity: opts.emissiveIntensity || 0,
+    });
+}
+
+function _phBox(parent, name, w, h, d, x, y, z, mat, keep) {
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.name = name;
+    mesh.position.set(x, y, z);
+    if (keep) mesh.userData._keepColor = true;
+    parent.add(mesh);
+    return mesh;
+}
+
+function _phMesh(parent, name, geometry, x, y, z, mat, keep) {
+    var mesh = new THREE.Mesh(geometry, mat);
+    mesh.name = name;
+    mesh.position.set(x, y, z);
+    if (keep) mesh.userData._keepColor = true;
+    parent.add(mesh);
+    return mesh;
+}
+
+function _rarityPal(name) {
+    return RARITY_MATERIALS[name] || RARITY_MATERIALS["Common"];
+}
+
+function _elementHex(elementName, fallbackHex) {
+    if (elementName && ELEMENT_COLORS[elementName]) return ELEMENT_COLORS[elementName];
+    return fallbackHex;
+}
+
+function buildCharacterPlaceholder(charName) {
+    var look = CLASS_SILHOUETTE[charName] || { build: "average", suit: 0x33404c, accent: 0x8eb4d4, skin: 0xc48a6a };
+    var sc = BUILD_SCALE[look.build] || BUILD_SCALE.average;
+    var W = sc.w;
+    var H = sc.h;
+    var g = new THREE.Group();
+    g.name = "placeholder-character";
+    g.userData._procedural = true;
+
+    var suit = _phMat(look.suit, { metalness: 0.22, roughness: 0.58 });
+    var skin = _phMat(look.skin, { metalness: 0.04, roughness: 0.72 });
+    var accent = _phMat(look.accent, { metalness: 0.35, roughness: 0.42, emissive: look.accent, emissiveIntensity: 0.22 });
+    var metal = _phMat(0x9aa3ad, { metalness: 0.82, roughness: 0.28 });
+
+    var legH = 0.72 * H;
+    var legW = 0.15 * W;
+    var hip = 0.11 * W;
+    _phBox(g, "leg", legW, legH, legW, -hip, legH / 2, 0, suit, true);
+    _phBox(g, "leg", legW, legH, legW, hip, legH / 2, 0, suit, true);
+
+    var torsoH = 0.52 * H;
+    var torsoY = legH + torsoH / 2;
+    _phBox(g, "torso", 0.40 * W, torsoH, 0.22 * W, 0, torsoY, 0, suit, true);
+
+    var armH = 0.46 * H;
+    var armW = 0.11 * W;
+    var armX = 0.28 * W;
+    var armY = torsoY + torsoH * 0.15;
+    // The figure faces +z (the camera). Their right hand is world -x, their left is world +x.
+    var leftIsMech = charName === "Gaige";
+    _phBox(g, "arm", armW, armH, armW, -armX, armY - armH / 2, 0, suit, true);
+    _phBox(g, leftIsMech ? "mech-arm" : "arm", armW, armH, armW, armX, armY - armH / 2, 0, leftIsMech ? metal : suit, true);
+
+    var headR = 0.15 * Math.max(H, 0.85);
+    var headY = legH + torsoH + headR * 0.85;
+    var headZ = 0.02;
+    if (charName === "Zer0") {
+        _phBox(g, "helmet", headR * 1.7, headR * 2.0, headR * 1.7, 0, headY, headZ, suit, true);
+        // Visor sits on the +z side of the helmet, toward the camera.
+        var visorMat = _phMat(look.accent, { metalness: 0.15, roughness: 0.25, emissive: look.accent, emissiveIntensity: 0.9 });
+        _phBox(g, "visor", headR * 1.5, headR * 0.42, 0.05, 0, headY, headZ + headR, visorMat, true);
+    } else {
+        _phMesh(g, "head", new THREE.SphereGeometry(headR, 16, 12), 0, headY, headZ, skin, false);
+        var eyeMat = _phMat(0x161616, { metalness: 0.1, roughness: 0.35 });
+        var eyeZ = headZ + headR * 0.92;
+        _phMesh(g, "eye", new THREE.SphereGeometry(headR * 0.18, 8, 8), -headR * 0.38, headY + headR * 0.12, eyeZ, eyeMat, true);
+        _phMesh(g, "eye", new THREE.SphereGeometry(headR * 0.18, 8, 8), headR * 0.38, headY + headR * 0.12, eyeZ, eyeMat, true);
+    }
+
+    if (charName === "Axton") {
+        // Turret pack sits on the back, -z, away from the camera. Badge is on the chest.
+        _phBox(g, "turret", 0.22 * W, 0.28 * H, 0.18 * W, 0, torsoY, -0.20, accent, true);
+        _phBox(g, "badge", 0.14 * W, 0.08 * H, 0.04, 0, torsoY + torsoH * 0.12, 0.12 * W, accent, true);
+    } else if (charName === "Maya") {
+        _phBox(g, "hair", 0.20 * W, 0.34 * H, 0.16 * W, 0, headY, headZ - headR * 1.2, accent, true);
+        _phBox(g, "siren", 0.06 * W, 0.16 * H, 0.04, armX, armY - armH * 0.35, armW, accent, true);
+    } else if (charName === "Salvador") {
+        _phBox(g, "sidearm", 0.16, 0.07, 0.08, -armX - 0.06, armY - armH, 0.06, metal, true);
+        _phBox(g, "sidearm", 0.16, 0.07, 0.08, armX + 0.06, armY - armH, 0.06, metal, true);
+    } else if (charName === "Gaige") {
+        _phMesh(g, "pigtail", new THREE.SphereGeometry(headR * 0.55, 12, 10), -headR * 1.2, headY + headR * 0.1, headZ - 0.02, accent, true);
+        _phMesh(g, "pigtail", new THREE.SphereGeometry(headR * 0.55, 12, 10), headR * 1.2, headY + headR * 0.1, headZ - 0.02, accent, true);
+        _phBox(g, "watcher", 0.16, 0.18, 0.12, armX + 0.22, 0.55 * H, 0, metal, true);
+        _phMesh(g, "watcher-eye", new THREE.SphereGeometry(0.045, 10, 8), armX + 0.22, 0.62 * H, 0.08, accent, true);
+    } else if (charName === "Krieg") {
+        // Buzz axe in the right hand, extending toward -x (screen left when facing the camera).
+        _phBox(g, "axe", 0.50, 0.07, 0.035, -(armX + 0.30), armY - armH * 0.9, 0.04, metal, true);
+    }
+    return g;
+}
+
+function buildWeaponPlaceholder(spec) {
+    spec = spec || {};
+    var category = spec.category || "Pistol";
+    var profile = GUN_PROFILE[category] || GUN_PROFILE["Pistol"];
+    var pal = _rarityPal(spec.rarityName);
+    var pbr = MANUFACTURER_PBR[spec.manufacturer] || MANUFACTURER_PBR["default"];
+    var elemHex = _elementHex(spec.elementName, pal.accent);
+    var g = new THREE.Group();
+    g.name = "placeholder-weapon";
+    g.userData._procedural = true;
+
+    var bodyMat = _phMat(pal.base, {
+        metalness: pbr.metalness, roughness: pbr.roughness,
+        emissive: pal.accent, emissiveIntensity: 0.07,
+    });
+    var darkMat = _phMat(0x1a1c20, { metalness: 0.3, roughness: 0.62 });
+    var steelMat = _phMat(0x8d9298, { metalness: 0.86, roughness: 0.28 });
+    var glowMat = _phMat(elemHex, { metalness: 0.2, roughness: 0.35, emissive: elemHex, emissiveIntensity: 0.65 });
+    var barrelMat = profile.barrelR >= 0.07 ? bodyMat : steelMat;
+
+    var x = 0;
+    if (profile.stock > 0) {
+        _phBox(g, "stock", profile.stock, profile.fat * 0.85, profile.fat * 0.7, x + profile.stock / 2, 0.02, 0, darkMat, true);
+        x += profile.stock;
+    }
+    var bodyX = x + profile.body / 2;
+    _phBox(g, "receiver", profile.body, profile.fat, profile.fat * 0.85, bodyX, 0.04, 0, bodyMat, true);
+    _phBox(g, "grip", profile.fat * 0.55, profile.fat * 1.7, profile.fat * 0.55, bodyX - profile.body * 0.15, -profile.fat * 0.85, 0, darkMat, true);
+    if (profile.mag > 0) {
+        _phBox(g, "magazine", profile.fat * 0.7, profile.mag, profile.fat * 0.55, bodyX + profile.body * 0.1, -profile.mag / 2, 0, darkMat, true);
+    }
+    x += profile.body;
+
+    var barrelLen = profile.barrel;
+    // radiusTop sits on local +Y. After Rz(-PI/2) that end is the muzzle (+x), so it is the narrower one.
+    var barrel = _phMesh(g, "barrel", new THREE.CylinderGeometry(profile.barrelR * 0.92, profile.barrelR, barrelLen, 12), x + barrelLen / 2, 0.045, 0, barrelMat, true);
+    barrel.rotation.z = -Math.PI / 2;
+    if (category === "Shotgun") {
+        _phBox(g, "pump", barrelLen * 0.38, profile.barrelR * 3.2, profile.barrelR * 3.2, x + barrelLen * 0.42, 0.045, 0, darkMat, true);
+    }
+    var muzzleX = x + barrelLen;
+    var muzzle = _phMesh(g, "muzzle", new THREE.SphereGeometry(Math.max(0.03, profile.barrelR * 0.85), 10, 8), muzzleX, 0.045, 0, glowMat, true);
+    muzzle.userData._keepColor = true;
+
+    if (profile.scope > 0) {
+        _phBox(g, "scope", profile.scope, profile.fat * 0.55, profile.fat * 0.55, bodyX + profile.body * 0.15, profile.fat * 0.85, 0, darkMat, true);
+        _phMesh(g, "scope-glass", new THREE.SphereGeometry(profile.fat * 0.22, 10, 8), bodyX + profile.body * 0.15 + profile.scope * 0.4, profile.fat * 0.85, 0, glowMat, true);
+    }
+    return g;
+}
+
+function buildItemPlaceholder(spec) {
+    spec = spec || {};
+    var category = spec.category || "Relic";
+    var pal = _rarityPal(spec.rarityName);
+    var elemHex = _elementHex(spec.elementName, pal.accent);
+    var g = new THREE.Group();
+    g.name = "placeholder-item";
+    g.userData._procedural = true;
+    var bodyMat = _phMat(pal.base, { metalness: 0.55, roughness: 0.36, emissive: pal.accent, emissiveIntensity: 0.1 });
+    var glowMat = _phMat(elemHex, { metalness: 0.25, roughness: 0.32, emissive: elemHex, emissiveIntensity: 0.6 });
+
+    if (category === "Shield") {
+        var disc = _phMesh(g, "shield-face", new THREE.CylinderGeometry(0.62, 0.62, 0.07, 6), 0, 0, 0, bodyMat, true);
+        // Local +Y is the cap normal. Rx(+PI/2) sends (0,1,0) to (0,0,1), toward the camera.
+        disc.rotation.x = Math.PI / 2;
+        var ring = _phMesh(g, "shield-ring", new THREE.TorusGeometry(0.46, 0.028, 8, 6), 0, 0, 0.05, glowMat, true);
+        // TorusGeometry already lies in the XY plane, so the ring faces +z as built.
+        ring.position.z = 0.05;
+        _phMesh(g, "shield-core", new THREE.SphereGeometry(0.16, 16, 12), 0, 0, 0.1, glowMat, true);
+    } else if (category === "Grenade Mod") {
+        _phMesh(g, "grenade", new THREE.SphereGeometry(0.34, 20, 14), 0, 0, 0, bodyMat, true);
+        var band = _phMesh(g, "grenade-band", new THREE.TorusGeometry(0.30, 0.04, 12, 28), 0, 0, 0, glowMat, true);
+        // Rx(+PI/2) lays the ring around the vertical axis so it reads as a stripe.
+        band.rotation.x = Math.PI / 2;
+        _phMesh(g, "pin", new THREE.CylinderGeometry(0.018, 0.018, 0.22, 8), 0, 0.44, 0, _phMat(0xd5d5d5, { metalness: 0.9, roughness: 0.2 }), true);
+        _phBox(g, "lever", 0.05, 0.16, 0.04, 0.08, 0.28, 0.22, _phMat(0x222222, { metalness: 0.4, roughness: 0.5 }), true);
+    } else if (category === "Class Mod") {
+        var look = CLASS_SILHOUETTE[spec.charClass] || { accent: pal.accent, suit: 0x2a3038 };
+        var stripeMat = _phMat(look.accent, { metalness: 0.4, roughness: 0.4, emissive: look.accent, emissiveIntensity: 0.35 });
+        _phBox(g, "classmod", 0.46, 0.78, 0.16, 0, 0, 0, _phMat(0x242830, { metalness: 0.5, roughness: 0.45, emissive: pal.accent, emissiveIntensity: 0.05 }), true);
+        _phBox(g, "classmod-stripe", 0.48, 0.12, 0.18, 0, 0.2, 0, stripeMat, true);
+        _phMesh(g, "classmod-core", new THREE.SphereGeometry(0.07, 12, 10), 0, -0.08, 0.1, glowMat, true);
+    } else {
+        _phMesh(g, "relic", new THREE.OctahedronGeometry(0.42), 0, 0.12, 0, _phMat(pal.base, { metalness: 0.15, roughness: 0.22, emissive: pal.accent, emissiveIntensity: 0.45 }), true);
+        _phBox(g, "relic-base", 0.36, 0.08, 0.36, 0, -0.28, 0, _phMat(0x2a2418, { metalness: 0.4, roughness: 0.55 }), true);
+    }
+    return g;
+}
+
+function buildProceduralModel(spec) {
+    spec = spec || {};
+    var kind = spec.kind || "item";
+    if (kind === "character") return buildCharacterPlaceholder(spec.name);
+    if (kind === "weapon") return buildWeaponPlaceholder(spec);
+    return buildItemPlaceholder(spec);
+}
+
+// Scale and seat a loaded group so its bottom rests on y=0 and its longest
+// side matches fitHeight. Translation only: no extra yaw, so a +z face stays
+// toward the camera and a +x barrel stays to the right.
+function fitLoadedGroup(group, fitHeight) {
+    var box = new THREE.Box3().setFromObject(group);
+    var size = box.getSize(new THREE.Vector3());
+    var center = box.getCenter(new THREE.Vector3());
+    var maxDim = Math.max(size.x, size.y, size.z);
+    if (!(maxDim > 0)) maxDim = 1;
+    var scale = fitHeight / maxDim;
+    group.scale.setScalar(scale);
+    group.position.x = -center.x * scale;
+    group.position.y = -box.min.y * scale;
+    group.position.z = -center.z * scale;
+    group.updateMatrixWorld(true);
+    return scale;
+}
+
 // ─── Viewer Factory ───────────────────────────────────────
 function createViewer(containerId) {
     var container = document.getElementById(containerId);
@@ -1652,34 +1928,21 @@ function createViewer(containerId) {
             var onLoadedCb = opts.onLoaded || null;
 
             if (!Array.isArray(urls)) urls = [urls];
-            var GLTFLoaderClass = THREE.GLTFLoader;
-            if (!GLTFLoaderClass) { console.warn("GLTFLoader not available"); return; }
-            var loader = new GLTFLoaderClass();
+            urls = urls.filter(function(u) { return !!u; });
             var group = new THREE.Group();
-            var loaded = 0;
-            var failed = 0;
-            var total = urls.length;
 
-            function onDone() {
-                if (failed >= total) return;
+            function finish(usedFallback) {
+                if (group.children.length === 0) return;
                 // Sort children by load index to guarantee deterministic order
                 // (async loads can complete in any order)
                 group.children.sort(function(a, b) {
                     return (a.userData._loadIndex || 0) - (b.userData._loadIndex || 0);
                 });
-                if (overrideMaterial) {
+                // Textured overrides expect a real glTF. Stand-ins keep their own materials.
+                if (!usedFallback && overrideMaterial) {
                     applyMaterialOverride(group, overrideMaterial);
                 }
-                var box = new THREE.Box3().setFromObject(group);
-                var size = box.getSize(new THREE.Vector3());
-                var center = box.getCenter(new THREE.Vector3());
-                var maxDim = Math.max(size.x, size.y, size.z);
-                if (maxDim === 0) maxDim = 1;
-                var scale = fitHeight / maxDim;
-                group.scale.setScalar(scale);
-                group.position.x = -center.x * scale;
-                group.position.y = -box.min.y * scale;
-                group.position.z = -center.z * scale;
+                fitLoadedGroup(group, fitHeight);
 
                 self.currentModel = group;
                 currentModel = group;
@@ -1693,22 +1956,56 @@ function createViewer(containerId) {
                 if (onLoadedCb) onLoadedCb(group);
             }
 
+            function useFallback() {
+                var ph = buildProceduralModel(opts.fallback);
+                if (!ph) return;
+                ph.userData._loadIndex = 0;
+                ph.userData._procedural = true;
+                group.userData._procedural = true;
+                group.add(ph);
+                finish(true);
+            }
+
+            if (!urls.length) {
+                useFallback();
+                return;
+            }
+
+            var GLTFLoaderClass = THREE.GLTFLoader;
+            if (!GLTFLoaderClass) {
+                console.warn("GLTFLoader not available");
+                useFallback();
+                return;
+            }
+            var loader = new GLTFLoaderClass();
+            var loaded = 0;
+            var failed = 0;
+            var total = urls.length;
+
             function tryFinish() {
                 loaded++;
-                if (loaded >= total) onDone();
+                if (loaded < total) return;
+                if (failed >= total || group.children.length === 0) useFallback();
+                else finish(false);
             }
 
             for (var i = 0; i < urls.length; i++) {
                 (function(url, idx) {
-                    loader.load(url, function(gltf) {
-                        gltf.scene.userData._loadIndex = idx;
-                        group.add(gltf.scene);
-                        tryFinish();
-                    }, undefined, function(err) {
+                    try {
+                        loader.load(url, function(gltf) {
+                            gltf.scene.userData._loadIndex = idx;
+                            group.add(gltf.scene);
+                            tryFinish();
+                        }, undefined, function(err) {
+                            console.warn("Failed to load:", url);
+                            failed++;
+                            tryFinish();
+                        });
+                    } catch (err) {
                         console.warn("Failed to load:", url);
                         failed++;
                         tryFinish();
-                    });
+                    }
                 })(urls[i], i);
             }
         },
@@ -1820,6 +2117,7 @@ function loadCharacterModel(charName, appearanceColors, headAsset, skinAsset) {
     var _pendingSkin = skinAsset || null;
     charViewer.loadModel([info.body, headUrl], {
         fitHeight: 2.0, cameraY: 0.9, spin: 0.004,
+        fallback: { kind: "character", name: charName },
         onLoaded: function(group) {
             // Apply per-head MIC material (real diffuse/mask/normal/reflect/decal/pattern + zone colors)
             // BEFORE skin recolor — applyHeadMaterial flags the head subgroup so applySkinColors
@@ -1900,12 +2198,18 @@ function showEquipmentInViewer(category, rarityName, elementName, charClass, man
         mat = createTexturedItemMaterial(category, rarityName || "Common");
     }
 
-    if (!url) {
-        if (_currentCharName) loadCharacterModel(_currentCharName);
-        return;
-    }
-
-    var loadOpts = { fitHeight: 1.5, cameraY: 0.5, spin: 0.006, material: mat };
+    var isWeapon = weaponCategories.indexOf(category) !== -1;
+    var loadOpts = {
+        fitHeight: 1.5, cameraY: 0.5, spin: 0.006, material: mat,
+        fallback: {
+            kind: isWeapon ? "weapon" : "item",
+            category: category,
+            rarityName: rarityName || "Common",
+            elementName: elementName || null,
+            manufacturer: manufacturer || null,
+            charClass: charClass || null,
+        },
+    };
     if (gestaltCategories.indexOf(category) !== -1) {
         loadOpts.onLoaded = function(group) {
             if (partPaths && partPaths.length && _gestaltMap && _partMeshNames) {
@@ -1915,7 +2219,7 @@ function showEquipmentInViewer(category, rarityName, elementName, charClass, man
             }
         };
     }
-    charViewer.loadModel([url], loadOpts);
+    charViewer.loadModel(url ? [url] : [], loadOpts);
     charViewer.setAccentLight(rarityName || "Common", elementName);
     _updateViewportOverlay();
 }
@@ -2013,9 +2317,17 @@ function initPreviewViewer(containerId) {
 function loadWeaponPreview(category, rarityName, elementName, manufacturer, partPaths) {
     if (!previewViewer) return;
     var url = WEAPON_MODELS[category];
-    if (!url) return;
     var mat = createTexturedWeaponMaterial(category, rarityName || "Common", elementName, manufacturer);
-    var loadOpts = { fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat };
+    var loadOpts = {
+        fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat,
+        fallback: {
+            kind: "weapon",
+            category: category,
+            rarityName: rarityName || "Common",
+            elementName: elementName || null,
+            manufacturer: manufacturer || null,
+        },
+    };
     loadOpts.onLoaded = function(group) {
         if (partPaths && partPaths.length && _gestaltMap && _partMeshNames) {
             applyGestaltSectionVisibility(group, category, partPaths);
@@ -2023,10 +2335,10 @@ function loadWeaponPreview(category, rarityName, elementName, manufacturer, part
             applyGestaltManufacturerFallback(group, category, manufacturer);
         }
     };
-    previewViewer.loadModel([url], loadOpts);
+    previewViewer.loadModel(url ? [url] : [], loadOpts);
 }
 
-function loadItemPreview(category, charClass, rarityName) {
+function loadItemPreview(category, charClass, rarityName, elementName) {
     if (!previewViewer) return;
     var url;
     if (category === "Class Mod" && charClass) {
@@ -2034,9 +2346,17 @@ function loadItemPreview(category, charClass, rarityName) {
     } else {
         url = ITEM_MODELS[category];
     }
-    if (!url) return;
     var mat = createTexturedItemMaterial(category, rarityName || "Common", charClass);
-    previewViewer.loadModel([url], { fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat });
+    previewViewer.loadModel(url ? [url] : [], {
+        fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat,
+        fallback: {
+            kind: "item",
+            category: category,
+            charClass: charClass || null,
+            rarityName: rarityName || "Common",
+            elementName: elementName || null,
+        },
+    });
 }
 
 function updatePreviewMaterial(rarityName, elementName, isWeapon) {

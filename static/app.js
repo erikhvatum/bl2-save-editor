@@ -992,10 +992,22 @@ async function loadSkillTreeData() {
 }
 
 function getClassPrefix(charClassStr) {
-    // Map class path to skill tree key: "GD_Soldier.Character.CharClass_Soldier" -> "GD_Soldier"
+    // Tree files are keyed by package root: GD_Soldier, GD_Tulip, GD_Lilac.
+    // A greedy GD_\w+ match keeps the underscores in DLC classes, so
+    // GD_Tulip_Mechromancer and GD_Lilac_PlayerClass never hit a tree.
     if (!charClassStr) return null;
-    var match = charClassStr.match(/^(GD_\w+)\./);
-    return match ? match[1] : null;
+    var keys = Object.keys(_skillTreeData || {});
+    if (!keys.length) {
+        keys = ["GD_Tulip", "GD_Lilac", "GD_Mercenary", "GD_Assassin", "GD_Soldier", "GD_Siren"];
+    }
+    keys.sort(function(a, b) { return b.length - a.length; });
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (charClassStr === key || charClassStr.indexOf(key + ".") === 0 || charClassStr.indexOf(key + "_") === 0) {
+            return key;
+        }
+    }
+    return null;
 }
 
 // ── Skill Icon Mapping ──
@@ -1764,7 +1776,7 @@ function showPreview(item) {
                 loadWeaponPreview(cat, rarName, elemName, mfrName, prevPartPaths);
             } else {
                 var charClass = currentData && currentData.character ? currentData.character.class_name : null;
-                loadItemPreview(cat, charClass, rarName);
+                loadItemPreview(cat, charClass, rarName, elemName);
             }
         }, 50);
     }
