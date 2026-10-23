@@ -186,21 +186,31 @@ damage multiplier (1-100×) tied to a UI slider.
 
 ## 3D viewer asset extraction (optional)
 
-The viewer works without extracted assets — meshes fall back to procedural
-rarity-tinted placeholders. To enable real character and weapon meshes:
+The viewer works without extracted assets. Meshes fall back to procedural
+placeholders. Real meshes and textures are gitignored and are not part of
+the repository.
 
-1. Run [UModel](https://www.gildor.org/en/projects/umodel) against your BL2
-   install and export `Startup.upk` + head / weapon / item packages as glTF
-   + PNG into `static/models/` and `static/textures/`.
-2. Regenerate material sidecars:
-   ```bash
-   python tools/parse_head_mics.py
-   python tools/parse_weapon_mics.py
-   ```
-3. Restart the Flask app.
+On macOS, with [Wine](https://www.winehq.org/) installed:
 
-Override the default export paths with `BL2_MATI_EXTRACT`, `BL2_PSK_DIR`, and
-`BL2_WEAPON_MODELS_OUT` environment variables.
+```bash
+./extract_assets.command
+```
+
+That runs `tools/extract_viewer_assets.py`. It finds the game from
+`config.json` or Steam, downloads UModel if needed, and exports the character,
+head, weapon, and item files the viewer loads. The game install is only read.
+Re-running the command resumes where it left off. `./extract_assets.command check`
+reports anything still missing.
+
+The Mac port's UModel game tag is `border`. DLC high-resolution textures live
+beside the package in a sibling `Textures` folder, and the script stages those
+with symlinks outside the install. Head packages are exported one mesh at a
+time. After the copy, the script rebuilds the empty blue channel on the
+weapon, shield, and grenade normal maps.
+
+`parse_head_mics.py` and `parse_weapon_mics.py` rebuild the tracked material
+JSON from a UModel extract. The JSON already in this repository is filled in,
+so a normal extract does not need to run them.
 
 ## Usage
 
@@ -227,6 +237,7 @@ bl2-save-editor/
 ├── setup_wizard.py         Interactive end-to-end setup
 ├── requirements.txt        Python deps
 ├── start_editor.bat        Windows launcher (auto-opens browser)
+├── extract_assets.command  macOS viewer-asset extract (UModel under Wine)
 ├── apply_patch.bat         Self-elevating exe patch launcher
 ├── templates/
 │   └── index.html          Single-page app shell
@@ -237,6 +248,7 @@ bl2-save-editor/
 │   ├── models/             glTF character / weapon / item meshes (gitignored)
 │   └── textures/           PNG material maps (gitignored)
 ├── tools/
+│   ├── extract_viewer_assets.py  macOS UModel export into static/models and static/textures
 │   ├── parse_head_mics.py     UModel-export → head-material JSON
 │   ├── parse_weapon_mics.py   UModel-export → weapon-material JSON
 │   └── split_gestalt.py       PSK → per-weapon glTF splitter

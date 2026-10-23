@@ -37,8 +37,10 @@ const CLASSMOD_MODELS = {
 };
 
 // ─── Weapon Texture Paths ────────────────────────────────
-// comp = zone mask (p_Masks: R=A, G=B, B=C), nrm = normal map (p_NormalScopesEmissive),
-// dif = diffuse detail base (p_Diffuse) — extracted from BL2 MaterialInstanceConstants
+// comp = zone mask (p_Masks: R=A, G=B, B=C). Its own intensity is the ink.
+// nrm = normal map (p_NormalScopesEmissive). Blue is reconstructed; load it linear.
+// dif = the MIC p_Diffuse. Those Comp textures pack three unrelated grayscale
+// atlases into R, G, and B, so the viewer does not multiply them into the zone color.
 const WEAPON_TEXTURES = {
     "Pistol":          { comp: "/static/textures/weapons/Weap_Pistols_Comp.png",      nrm: "/static/textures/weapons/Weap_Pistols_Nrm.png",      dif: "/static/textures/weapons/Weap_LauncherShotgunPistol_Comp.png" },
     "Assault Rifle":   { comp: "/static/textures/weapons/Weap_AssaultRifle_Comp.png",  nrm: "/static/textures/weapons/Weap_AssaultRifle_Nrm.png",  dif: "/static/textures/weapons/Weap_AssaultSubSniper_Comp.png" },
@@ -49,9 +51,11 @@ const WEAPON_TEXTURES = {
 };
 
 // ─── Item Texture Paths ──────────────────────────────────
+// Shield and grenade comp textures are a left/right pair (soft shading | hard zone id),
+// each half stretched across the mesh UV. The diffuse is a real grayscale atlas.
 const ITEM_TEXTURES = {
-    "Shield":      { dif: "/static/textures/items/Shield_Dif.png",      nrm: "/static/textures/items/Shield_Nrm.png" },
-    "Grenade Mod": { dif: "/static/textures/items/Grenades_Dif.png",    nrm: "/static/textures/items/Grenades_Nrm.png" },
+    "Shield":      { dif: "/static/textures/items/Shield_Dif.png",      comp: "/static/textures/items/Shield_Comp.png",   nrm: "/static/textures/items/Shield_Nrm.png" },
+    "Grenade Mod": { dif: "/static/textures/items/Grenades_Dif.png",    comp: "/static/textures/items/Grenades_Comp.png", nrm: "/static/textures/items/Grenades_Nrm.png" },
     "Relic":       { dif: "/static/textures/items/ItemArtifacts_Comp.png" },
 };
 
@@ -399,10 +403,13 @@ function applyGestaltManufacturerFallback(group, weaponType, manufacturer) {
 var _textureCache = {};
 
 // Load texture with caching. opts: { flipY: bool, linear: bool }
+// glTF UV v=0 is the top of the PNG, so flipY defaults to false.
 function _loadTexture(url, opts) {
     if (typeof opts === "boolean") opts = { flipY: opts }; // legacy compat
     opts = opts || {};
-    var key = url + (opts.flipY ? "_flip" : "") + (opts.linear ? "_lin" : "");
+    var flipY = opts.flipY === true;
+    var linear = !!opts.linear;
+    var key = url + (flipY ? "_fy1" : "_fy0") + (linear ? "_lin" : "_srgb");
     if (_textureCache[key]) return _textureCache[key];
     var loader = new THREE.TextureLoader();
     var tex = loader.load(url,
@@ -415,12 +422,12 @@ function _loadTexture(url, opts) {
             console.error("Texture FAILED:", url, err);
         }
     );
-    if (opts.flipY === false) tex.flipY = false;
+    tex.flipY = flipY;
     // Bug 27: match UE3 Wrap mode — extracted mesh UVs exceed [0,1]
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     // sRGB for color textures displayed via standard materials, linear for shader inputs
-    if (!opts.linear) {
+    if (!linear) {
         if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
         else if (tex.encoding !== undefined) tex.encoding = THREE.sRGBEncoding;
     } else {
@@ -480,15 +487,14 @@ function createWeaponMaterial(rarityName, elementName) {
     });
 }
 
-// BL2 weapon texture compositing — matches the actual game's Master_Gun shader pipeline:
-// 1. p_Masks (zone mask RGB) selects zone A/B/C per pixel (dominant channel wins)
-// 2. Zone colors (shadow/midtone/highlight) are interpolated per zone based on mask intensity
-//    Modulated by p_ShadowsIntensity / p_HighlightsIntensity scalars (default 2 for heads, 4 for guns)
-// 3. The zone color overlay is multiply-sqrt blended onto p_Diffuse (the detail base texture)
-// 4. p_Pattern is overlaid additively, scaled by p_PatternIntensity, tinted by p_PatternColor
-//    UV scale/position from p_PatternScalePosition (R=scaleU, G=scaleV, B=offU, A=offV)
-// 5. p_Decal overlaid at fixed position (p_DecalScalePosition), tinted by p_DecalColor
-// Formula: result = sqrt(zoneOverlay * diffuseBase) — from BL2_skingen's multiply_sqrt.pyx
+// BL2 texture compositing.
+// Heads pass a real color p_Diffuse and multiply-sqrt it onto the zone color.
+// Weapons pass maskOnly: their p_Diffuse packs three unrelated atlases in R/G/B,
+// and multiplying those channels is what painted the rainbow ghost image.
+// 1. p_Masks selects zone A/B/C (dominant channel, threshold 40)
+// 2. Mask intensity lerps that zone's shadow → midtone → highlight
+// 3. Heads: result = sqrt(zoneColor * diffuse). Weapons: the zone color is the albedo
+// 4. p_Pattern and p_Decal overlay on top
 var _bl2CompositeCache = {};
 
 function _sampleImage(srcCanvas, srcPx, sw, sh, u, v) {
@@ -524,8 +530,9 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
     var maskData = ctx.getImageData(0, 0, w, h);
     var maskPx = maskData.data;
 
-    // Read diffuse pixels (scale to mask size if needed)
-    var difPx = _imageToData(difImg, w, h);
+    // Weapon p_Diffuse is not a color photo. Heads still pass a real diffuse.
+    var maskOnly = !!params.maskOnly;
+    var difPx = maskOnly ? null : _imageToData(difImg, w, h);
 
     // Optional pattern/decal overlays — pre-sample buffers at full mask resolution
     var pattern = params.pattern;
@@ -544,9 +551,10 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
     // Intensity scalars — defaults match Master_Player (heads). MasterMati (guns) default to 4.
     var shI = (params.shadowsIntensity != null) ? params.shadowsIntensity : 2.0;
     var hiI = (params.highlightsIntensity != null) ? params.highlightsIntensity : 2.0;
-    // Normalize so default 2 = neutral (multiplier 1.0); 4 doubles the contribution
-    var shadowsMul = shI * 0.5;
-    var hilightsMul = hiI * 0.5;
+    // Heads: default 2 = neutral. Weapons skip this — multiplying the shadow
+    // color by 2 flattens the atlas once the packed diffuse is gone.
+    var shadowsMul = maskOnly ? 1 : shI * 0.5;
+    var hilightsMul = maskOnly ? 1 : hiI * 0.5;
 
     var patIntensity = pattern ? pattern.intensity : 0;
     var patCol = pattern ? pattern.color : null;
@@ -581,10 +589,15 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
         var mg = maskPx[i + 1] / 255;   // zone B intensity
         var mb = maskPx[i + 2] / 255;   // zone C intensity
 
-        // Diffuse base pixel (linear 0-1)
-        var dr = difPx[i] / 255;
-        var dg = difPx[i + 1] / 255;
-        var db = difPx[i + 2] / 255;
+        // Diffuse base pixel. Weapons use white so the zone color stays intact.
+        var dr, dg, db;
+        if (maskOnly) {
+            dr = 1; dg = 1; db = 1;
+        } else {
+            dr = difPx[i] / 255;
+            dg = difPx[i + 1] / 255;
+            db = difPx[i + 2] / 255;
+        }
 
         // Determine dominant zone (BL2 ue_color_diff: highest channel wins, threshold 40/255)
         var zoneThreshold = 40 / 255;
@@ -600,10 +613,14 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
 
         var cr, cg, cb;
         if (zone === -1) {
-            // No zone — use diffuse directly with neutral tint
-            cr = dr * 0.7;
-            cg = dg * 0.7;
-            cb = db * 0.7;
+            // No zone — heads fall back to the diffuse; weapons stay dark.
+            if (maskOnly) {
+                cr = 0.05; cg = 0.05; cb = 0.05;
+            } else {
+                cr = dr * 0.7;
+                cg = dg * 0.7;
+                cb = db * 0.7;
+            }
         } else {
             // Select zone colors
             var zH, zM, zS;
@@ -632,11 +649,15 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
                 oB = zM[2] + (hB - zM[2]) * ht;
             }
 
-            // Multiply-sqrt blend: result = sqrt(overlay * diffuse)
-            // This is brighter than pure multiply, matches BL2's actual blending
-            cr = Math.sqrt(Math.max(0, oR * dr));
-            cg = Math.sqrt(Math.max(0, oG * dg));
-            cb = Math.sqrt(Math.max(0, oB * db));
+            if (maskOnly) {
+                // Zone color is the albedo. The packed diffuse is a different drawing.
+                cr = oR; cg = oG; cb = oB;
+            } else {
+                // Multiply-sqrt blend: result = sqrt(overlay * diffuse)
+                cr = Math.sqrt(Math.max(0, oR * dr));
+                cg = Math.sqrt(Math.max(0, oG * dg));
+                cb = Math.sqrt(Math.max(0, oB * db));
+            }
         }
 
         // Compute UV from pixel position for pattern/decal sampling
@@ -694,16 +715,18 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
             }
         }
 
-        // Reinhard tonemap for HDR values
-        cr = cr / (cr + 1.0);
-        cg = cg / (cg + 1.0);
-        cb = cb / (cb + 1.0);
-
-        // Contrast boost — soft curve that tapers near 1.0 to avoid clipping highlights
-        var _gain = 0.35;
-        cr = cr * (1.0 + _gain * (1.0 - cr));
-        cg = cg * (1.0 + _gain * (1.0 - cg));
-        cb = cb * (1.0 + _gain * (1.0 - cb));
+        // Reinhard plus a contrast lift assumed a dark detail texture under the
+        // zone color. That flattens a mask-only gun into gray, so weapons skip it
+        // and let HDR zone colors clip to white.
+        if (!maskOnly) {
+            cr = cr / (cr + 1.0);
+            cg = cg / (cg + 1.0);
+            cb = cb / (cb + 1.0);
+            var _gain = 0.35;
+            cr = cr * (1.0 + _gain * (1.0 - cr));
+            cg = cg * (1.0 + _gain * (1.0 - cg));
+            cb = cb * (1.0 + _gain * (1.0 - cb));
+        }
 
         // Linear to sRGB gamma
         out[i]     = Math.min(255, Math.pow(Math.max(cr, 0), 1.0 / 2.2) * 255 + 0.5) | 0;
@@ -757,12 +780,8 @@ function _loadImage(url, cb) {
     _imageCache[url] = img;
 }
 
-// Create weapon material using BL2's actual Master_Gun pipeline:
-// 1. Load zone mask (p_Masks) + diffuse detail (p_Diffuse)
-// 2. Pull per-rarity MIC params from weapon_materials.json (zone colors, decal/pattern,
-//    intensity scalars, decal/pattern colors and positions)
-// 3. Composite via _compositeBL2Texture with all overlays
-// 4. Apply normal map + PBR + reflect (envMap) + rarity emissive
+// Create weapon material from the zone mask, manufacturer colors, and pattern/decal.
+// The MIC p_Diffuse is intentionally not sampled: it is three packed atlases.
 function createTexturedWeaponMaterial(category, rarityName, elementName, manufacturer) {
     var texInfo = WEAPON_TEXTURES[category];
     if (!texInfo) return createWeaponMaterial(rarityName, elementName);
@@ -777,7 +796,7 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
     var colors = mic ? _micVectorsToColors(mic.vectors, mfr)
                      : (MANUFACTURER_COLORS[mfr] || MANUFACTURER_COLORS["default"]);
 
-    var nrmTex = _loadTexture(texInfo.nrm);
+    var nrmTex = _loadTexture(texInfo.nrm, { linear: true });
     var cacheKey = category + "_" + mfr + "_" + (rarityName || "Common");
     var pbr = MANUFACTURER_PBR[mfr] || MANUFACTURER_PBR["default"];
 
@@ -814,9 +833,9 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
         emissiveIntensity: emissiveStr,
     });
 
-    // Load mask + diffuse + (optional) pattern + decal in parallel; composite when ready.
-    var pendingLoads = 2;
-    var maskImg = null, difImg = null, patImg = null, dclImg = null;
+    // Mask plus optional pattern and decal. The packed diffuse is not loaded.
+    var pendingLoads = 1;
+    var maskImg = null, patImg = null, dclImg = null;
 
     var patUrl = mic && mic.textures && mic.textures.p_Pattern;
     var dclUrl = mic && mic.textures && mic.textures.p_Decal;
@@ -829,16 +848,13 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
 
     function tryComposite() {
         if (--pendingLoads > 0) return;
-        if (!maskImg || !difImg) {
-            // Fallback to diffuse-only with tint
-            var difTex = _loadTexture(texInfo.dif);
+        if (!maskImg) {
             var zM = colors.aM || [0.7, 0.7, 0.7];
-            mat.map = difTex;
             mat.color.setRGB(zM[0], zM[1], zM[2]);
             mat.needsUpdate = true;
             return;
         }
-        var params = {};
+        var params = { maskOnly: true };
         if (mic && mic.scalars) {
             params.shadowsIntensity = mic.scalars.p_ShadowsIntensity;
             params.highlightsIntensity = mic.scalars.p_HighlightsIntensity;
@@ -865,14 +881,13 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
         console.log("BL2 compositing:", cacheKey,
             maskImg.width + "x" + maskImg.height,
             patImg ? "+pattern" : "", dclImg ? "+decal" : "");
-        var compositeTex = _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params);
+        var compositeTex = _compositeBL2Texture(maskImg, null, colors, cacheKey, params);
         mat.map = compositeTex;
         mat.color.setRGB(1, 1, 1);
         mat.needsUpdate = true;
     }
 
     _loadImage(texInfo.comp, function(im) { maskImg = im; tryComposite(); });
-    _loadImage(texInfo.dif,  function(im) { difImg = im;  tryComposite(); });
     if (patUrl) _loadImage(patUrl, function(im) { patImg = im; tryComposite(); });
     if (dclUrl) _loadImage(dclUrl, function(im) { dclImg = im; tryComposite(); });
 
@@ -890,7 +905,131 @@ function createItemMaterial(rarityName) {
     });
 }
 
-// Create a textured item material using extracted game diffuse + normal maps
+// Master_ShieldGrenade would not export, so these stand in for its three zones:
+// olive body, dark recess, steel trim. Bytes, shadow / mid / highlight.
+var ITEM_SPLIT_ZONES = [
+    [[40, 42, 28], [98, 96, 58], [168, 160, 96]],
+    [[14, 14, 16], [36, 36, 40], [72, 74, 78]],
+    [[64, 68, 74], [150, 156, 164], [220, 224, 228]]
+];
+
+function _scaleByte(a, b) {
+    var product = (a * b) + 0x80;
+    return ((product >> 8) + product) >> 8;
+}
+
+function _swoopByte(a, b) {
+    if (a === 0 && b === 0) return 127;
+    if (a >= b) return 127 + ((1 - b / a) * 128) | 0;
+    return 127 - ((1 - a / b) * 127) | 0;
+}
+
+function _lerpByte(a, b, t) {
+    return _scaleByte(a, 255 - t) + _scaleByte(b, t);
+}
+
+// sqrt((top/255) * (base/255)) * 255 — BL2_skingen multiply_sqrt, alpha is opaque.
+function _sqrtByte(top, base) {
+    return Math.min(255, Math.sqrt(_scaleByte(top, base) / 255) * 255 + 0.5) | 0;
+}
+
+function _srgbCanvasTexture(canvas) {
+    var tex = new THREE.CanvasTexture(canvas);
+    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    else if (tex.encoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+    tex.flipY = false;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
+// Left half of the comp is the soft mask, right half is the hard zone id.
+// Both are stretched over the full UV, then multiply-sqrt'd with the grayscale diffuse.
+function _compositeSplitItem(compImg, difImg, cacheKey) {
+    if (_bl2CompositeCache[cacheKey]) return _bl2CompositeCache[cacheKey];
+    var w = difImg.naturalWidth || difImg.width;
+    var h = difImg.naturalHeight || difImg.height;
+    var canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(difImg, 0, 0, w, h);
+    var difPx = ctx.getImageData(0, 0, w, h).data;
+    ctx.drawImage(compImg, 0, 0, w, h);
+    var compPx = ctx.getImageData(0, 0, w, h).data;
+    var outData = ctx.createImageData(w, h);
+    var out = outData.data;
+    var half = w >> 1;
+    for (var y = 0; y < h; y++) {
+        var row = y * w;
+        for (var x = 0; x < w; x++) {
+            var sx = x >> 1;
+            var soft = (row + sx) * 4;
+            var hard = (row + sx + half) * 4;
+            var di = (row + x) * 4;
+            var hr = compPx[hard], hg = compPx[hard + 1], hb = compPx[hard + 2];
+            var zone, dom;
+            if (hr >= hg && hr >= hb) { zone = 0; dom = hr; }
+            else if (hg >= hr && hg >= hb) { zone = 1; dom = hg; }
+            else { zone = 2; dom = hb; }
+            if (dom < 40) {
+                out[di] = difPx[di];
+                out[di + 1] = difPx[di + 1];
+                out[di + 2] = difPx[di + 2];
+                out[di + 3] = 255;
+                continue;
+            }
+            var sr = compPx[soft], sg = compPx[soft + 1];
+            var mix = _swoopByte(sr, sg);
+            var cols = ITEM_SPLIT_ZONES[zone];
+            for (var c = 0; c < 3; c++) {
+                var c0 = _lerpByte(cols[1][c], cols[0][c], sg);
+                var c1 = _lerpByte(cols[1][c], cols[2][c], sr);
+                out[di + c] = _sqrtByte(_lerpByte(c0, c1, mix), difPx[di + c]);
+            }
+            out[di + 3] = 255;
+        }
+    }
+    ctx.putImageData(outData, 0, 0);
+    var tex = _srgbCanvasTexture(canvas);
+    _bl2CompositeCache[cacheKey] = tex;
+    return tex;
+}
+
+// ItemArtifacts_Comp is not an albedo. Red is a fill, green and blue are line art.
+// Mat_ItemArtifact is two-sided and masked at 0.333 on that red field.
+function _compositeRelic(img, rarityName, cacheKey) {
+    if (_bl2CompositeCache[cacheKey]) return _bl2CompositeCache[cacheKey];
+    var pal = RARITY_MATERIALS[rarityName] || RARITY_MATERIALS["Common"];
+    var br = (pal.base >> 16) & 255;
+    var bg = (pal.base >> 8) & 255;
+    var bb = pal.base & 255;
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    var canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    var src = ctx.getImageData(0, 0, w, h);
+    var px = src.data;
+    for (var i = 0; i < px.length; i += 4) {
+        var r = px[i];
+        var fill = r / 255;
+        var shade = 0.35 + 0.65 * fill;
+        var line = px[i + 1] > px[i + 2] ? px[i + 1] : px[i + 2];
+        var cr = br * shade + line * 0.9;
+        var cg = bg * shade + line * 0.95;
+        var cb = bb * shade + line * 1.1;
+        px[i] = cr > 255 ? 255 : cr | 0;
+        px[i + 1] = cg > 255 ? 255 : cg | 0;
+        px[i + 2] = cb > 255 ? 255 : cb | 0;
+        px[i + 3] = r;
+    }
+    ctx.putImageData(src, 0, 0);
+    var tex = _srgbCanvasTexture(canvas);
+    _bl2CompositeCache[cacheKey] = tex;
+    return tex;
+}
+
 function createTexturedItemMaterial(category, rarityName, charClass) {
     var texInfo = null;
     if (category === "Class Mod" && charClass) {
@@ -901,24 +1040,73 @@ function createTexturedItemMaterial(category, rarityName, charClass) {
     if (!texInfo) return createItemMaterial(rarityName);
 
     var pal = RARITY_MATERIALS[rarityName] || RARITY_MATERIALS["Common"];
-    var rarityColor = new THREE.Color(pal.base);
-    // Lighten the tint so it doesn't overpower the diffuse texture
-    var tint = rarityColor.clone().lerp(new THREE.Color(0.7, 0.7, 0.7), 0.5);
+    var emissive = new THREE.Color(pal.accent);
 
+    if (category === "Relic") {
+        var relicKey = "relic_" + (rarityName || "Common");
+        var relicMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            metalness: 0.15,
+            roughness: 0.35,
+            emissive: emissive,
+            emissiveIntensity: 0.35,
+            alphaTest: 0.333,
+            side: THREE.DoubleSide,
+        });
+        if (_bl2CompositeCache[relicKey]) relicMat.map = _bl2CompositeCache[relicKey];
+        else {
+            _loadImage(texInfo.dif, function(im) {
+                if (!im) return;
+                relicMat.map = _compositeRelic(im, rarityName || "Common", relicKey);
+                relicMat.needsUpdate = true;
+            });
+        }
+        return relicMat;
+    }
+
+    if (texInfo.comp) {
+        var splitKey = "split_" + category;
+        var splitMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            metalness: 0.45,
+            roughness: 0.42,
+            emissive: emissive,
+            emissiveIntensity: 0.06,
+        });
+        if (texInfo.nrm) {
+            splitMat.normalMap = _loadTexture(texInfo.nrm, { linear: true });
+            splitMat.normalScale = new THREE.Vector2(0.8, 0.8);
+        }
+        if (_bl2CompositeCache[splitKey]) {
+            splitMat.map = _bl2CompositeCache[splitKey];
+        } else {
+            var compImg = null, difImg = null, left = 2;
+            function ready() {
+                if (--left > 0) return;
+                if (!compImg || !difImg) return;
+                splitMat.map = _compositeSplitItem(compImg, difImg, splitKey);
+                splitMat.needsUpdate = true;
+            }
+            _loadImage(texInfo.comp, function(im) { compImg = im; ready(); });
+            _loadImage(texInfo.dif, function(im) { difImg = im; ready(); });
+        }
+        return splitMat;
+    }
+
+    // Class mods ship a real diffuse. Keep the rarity tint; orient the maps to glTF UVs.
+    var tint = new THREE.Color(pal.base).lerp(new THREE.Color(0.7, 0.7, 0.7), 0.5);
     var opts = {
         map: _loadTexture(texInfo.dif),
         color: tint,
         metalness: 0.3,
         roughness: 0.50,
-        emissive: new THREE.Color(pal.accent),
+        emissive: emissive,
         emissiveIntensity: 0.04,
     };
-
     if (texInfo.nrm) {
-        opts.normalMap = _loadTexture(texInfo.nrm);
+        opts.normalMap = _loadTexture(texInfo.nrm, { linear: true });
         opts.normalScale = new THREE.Vector2(0.7, 0.7);
     }
-
     return new THREE.MeshStandardMaterial(opts);
 }
 
@@ -1346,12 +1534,13 @@ function applyHeadMaterial(headGroup, headAsset) {
             emissiveIntensity: 0.0,
         };
         if (nrmUrl) {
-            matOpts.normalMap = _loadTexture(nrmUrl);
+            // Keep the orientation character heads already looked right with.
+            matOpts.normalMap = _loadTexture(nrmUrl, { flipY: true });
             matOpts.normalScale = new THREE.Vector2(0.9, 0.9);
         }
         if (refUrl) {
             // Use reflect texture as an env-style sphere map for cheap shine
-            var rt = _loadTexture(refUrl);
+            var rt = _loadTexture(refUrl, { flipY: true });
             rt.mapping = THREE.EquirectangularReflectionMapping;
             matOpts.envMap = rt;
             var refCol = (mic.vectors && mic.vectors.p_ReflectColor) || [1,1,1];
