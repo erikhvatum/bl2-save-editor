@@ -37,8 +37,10 @@ const CLASSMOD_MODELS = {
 };
 
 // ─── Weapon Texture Paths ────────────────────────────────
-// comp = zone mask (p_Masks: R=A, G=B, B=C), nrm = normal map (p_NormalScopesEmissive),
-// dif = diffuse detail base (p_Diffuse) — extracted from BL2 MaterialInstanceConstants
+// comp = zone mask (p_Masks: R=A, G=B, B=C). Its own intensity is the ink.
+// nrm = normal map (p_NormalScopesEmissive). Blue is reconstructed; load it linear.
+// dif = the MIC p_Diffuse. Those Comp textures pack three unrelated grayscale
+// atlases into R, G, and B, so the viewer does not multiply them into the zone color.
 const WEAPON_TEXTURES = {
     "Pistol":          { comp: "/static/textures/weapons/Weap_Pistols_Comp.png",      nrm: "/static/textures/weapons/Weap_Pistols_Nrm.png",      dif: "/static/textures/weapons/Weap_LauncherShotgunPistol_Comp.png" },
     "Assault Rifle":   { comp: "/static/textures/weapons/Weap_AssaultRifle_Comp.png",  nrm: "/static/textures/weapons/Weap_AssaultRifle_Nrm.png",  dif: "/static/textures/weapons/Weap_AssaultSubSniper_Comp.png" },
@@ -49,9 +51,11 @@ const WEAPON_TEXTURES = {
 };
 
 // ─── Item Texture Paths ──────────────────────────────────
+// Shield and grenade comp textures are a left/right pair (soft shading | hard zone id),
+// each half stretched across the mesh UV. The diffuse is a real grayscale atlas.
 const ITEM_TEXTURES = {
-    "Shield":      { dif: "/static/textures/items/Shield_Dif.png",      nrm: "/static/textures/items/Shield_Nrm.png" },
-    "Grenade Mod": { dif: "/static/textures/items/Grenades_Dif.png",    nrm: "/static/textures/items/Grenades_Nrm.png" },
+    "Shield":      { dif: "/static/textures/items/Shield_Dif.png",      comp: "/static/textures/items/Shield_Comp.png",   nrm: "/static/textures/items/Shield_Nrm.png" },
+    "Grenade Mod": { dif: "/static/textures/items/Grenades_Dif.png",    comp: "/static/textures/items/Grenades_Comp.png", nrm: "/static/textures/items/Grenades_Nrm.png" },
     "Relic":       { dif: "/static/textures/items/ItemArtifacts_Comp.png" },
 };
 
@@ -192,7 +196,21 @@ function _loadGestaltData(callback) {
 // Preload gestalt data on script load
 _loadGestaltData();
 
+function _groupIsProcedural(group) {
+    if (!group) return false;
+    if (group.userData && group.userData._procedural) return true;
+    var found = false;
+    if (group.traverse) {
+        group.traverse(function(node) {
+            if (node.userData && node.userData._procedural) found = true;
+        });
+    }
+    return found;
+}
+
 function applyGestaltSectionVisibility(group, weaponType, partPaths) {
+    // Procedural stand-ins are not gestalt meshes. Section groups would hide them.
+    if (_groupIsProcedural(group)) return;
     if (!group || !_gestaltMap || !_partMeshNames) return;
     if (!partPaths || !partPaths.length) return;
 
@@ -310,6 +328,7 @@ var _GESTALT_SLOTS = {
 };
 
 function applyGestaltManufacturerFallback(group, weaponType, manufacturer) {
+    if (_groupIsProcedural(group)) return;
     if (!group || !_gestaltMap || !manufacturer) return;
     var gestaltKey = weaponType.replace(/ /g, "_");
     if (gestaltKey === "Grenade_Mod") gestaltKey = "Grenade";
@@ -384,10 +403,13 @@ function applyGestaltManufacturerFallback(group, weaponType, manufacturer) {
 var _textureCache = {};
 
 // Load texture with caching. opts: { flipY: bool, linear: bool }
+// glTF UV v=0 is the top of the PNG, so flipY defaults to false.
 function _loadTexture(url, opts) {
     if (typeof opts === "boolean") opts = { flipY: opts }; // legacy compat
     opts = opts || {};
-    var key = url + (opts.flipY ? "_flip" : "") + (opts.linear ? "_lin" : "");
+    var flipY = opts.flipY === true;
+    var linear = !!opts.linear;
+    var key = url + (flipY ? "_fy1" : "_fy0") + (linear ? "_lin" : "_srgb");
     if (_textureCache[key]) return _textureCache[key];
     var loader = new THREE.TextureLoader();
     var tex = loader.load(url,
@@ -400,12 +422,12 @@ function _loadTexture(url, opts) {
             console.error("Texture FAILED:", url, err);
         }
     );
-    if (opts.flipY === false) tex.flipY = false;
+    tex.flipY = flipY;
     // Bug 27: match UE3 Wrap mode — extracted mesh UVs exceed [0,1]
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     // sRGB for color textures displayed via standard materials, linear for shader inputs
-    if (!opts.linear) {
+    if (!linear) {
         if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
         else if (tex.encoding !== undefined) tex.encoding = THREE.sRGBEncoding;
     } else {
@@ -465,15 +487,14 @@ function createWeaponMaterial(rarityName, elementName) {
     });
 }
 
-// BL2 weapon texture compositing — matches the actual game's Master_Gun shader pipeline:
-// 1. p_Masks (zone mask RGB) selects zone A/B/C per pixel (dominant channel wins)
-// 2. Zone colors (shadow/midtone/highlight) are interpolated per zone based on mask intensity
-//    Modulated by p_ShadowsIntensity / p_HighlightsIntensity scalars (default 2 for heads, 4 for guns)
-// 3. The zone color overlay is multiply-sqrt blended onto p_Diffuse (the detail base texture)
-// 4. p_Pattern is overlaid additively, scaled by p_PatternIntensity, tinted by p_PatternColor
-//    UV scale/position from p_PatternScalePosition (R=scaleU, G=scaleV, B=offU, A=offV)
-// 5. p_Decal overlaid at fixed position (p_DecalScalePosition), tinted by p_DecalColor
-// Formula: result = sqrt(zoneOverlay * diffuseBase) — from BL2_skingen's multiply_sqrt.pyx
+// BL2 texture compositing.
+// Heads pass a real color p_Diffuse and multiply-sqrt it onto the zone color.
+// Weapons pass maskOnly: their p_Diffuse packs three unrelated atlases in R/G/B,
+// and multiplying those channels is what painted the rainbow ghost image.
+// 1. p_Masks selects zone A/B/C (dominant channel, threshold 40)
+// 2. Mask intensity lerps that zone's shadow → midtone → highlight
+// 3. Heads: result = sqrt(zoneColor * diffuse). Weapons: the zone color is the albedo
+// 4. p_Pattern and p_Decal overlay on top
 var _bl2CompositeCache = {};
 
 function _sampleImage(srcCanvas, srcPx, sw, sh, u, v) {
@@ -509,8 +530,9 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
     var maskData = ctx.getImageData(0, 0, w, h);
     var maskPx = maskData.data;
 
-    // Read diffuse pixels (scale to mask size if needed)
-    var difPx = _imageToData(difImg, w, h);
+    // Weapon p_Diffuse is not a color photo. Heads still pass a real diffuse.
+    var maskOnly = !!params.maskOnly;
+    var difPx = maskOnly ? null : _imageToData(difImg, w, h);
 
     // Optional pattern/decal overlays — pre-sample buffers at full mask resolution
     var pattern = params.pattern;
@@ -529,9 +551,10 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
     // Intensity scalars — defaults match Master_Player (heads). MasterMati (guns) default to 4.
     var shI = (params.shadowsIntensity != null) ? params.shadowsIntensity : 2.0;
     var hiI = (params.highlightsIntensity != null) ? params.highlightsIntensity : 2.0;
-    // Normalize so default 2 = neutral (multiplier 1.0); 4 doubles the contribution
-    var shadowsMul = shI * 0.5;
-    var hilightsMul = hiI * 0.5;
+    // Heads: default 2 = neutral. Weapons skip this — multiplying the shadow
+    // color by 2 flattens the atlas once the packed diffuse is gone.
+    var shadowsMul = maskOnly ? 1 : shI * 0.5;
+    var hilightsMul = maskOnly ? 1 : hiI * 0.5;
 
     var patIntensity = pattern ? pattern.intensity : 0;
     var patCol = pattern ? pattern.color : null;
@@ -566,10 +589,15 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
         var mg = maskPx[i + 1] / 255;   // zone B intensity
         var mb = maskPx[i + 2] / 255;   // zone C intensity
 
-        // Diffuse base pixel (linear 0-1)
-        var dr = difPx[i] / 255;
-        var dg = difPx[i + 1] / 255;
-        var db = difPx[i + 2] / 255;
+        // Diffuse base pixel. Weapons use white so the zone color stays intact.
+        var dr, dg, db;
+        if (maskOnly) {
+            dr = 1; dg = 1; db = 1;
+        } else {
+            dr = difPx[i] / 255;
+            dg = difPx[i + 1] / 255;
+            db = difPx[i + 2] / 255;
+        }
 
         // Determine dominant zone (BL2 ue_color_diff: highest channel wins, threshold 40/255)
         var zoneThreshold = 40 / 255;
@@ -585,10 +613,14 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
 
         var cr, cg, cb;
         if (zone === -1) {
-            // No zone — use diffuse directly with neutral tint
-            cr = dr * 0.7;
-            cg = dg * 0.7;
-            cb = db * 0.7;
+            // No zone — heads fall back to the diffuse; weapons stay dark.
+            if (maskOnly) {
+                cr = 0.05; cg = 0.05; cb = 0.05;
+            } else {
+                cr = dr * 0.7;
+                cg = dg * 0.7;
+                cb = db * 0.7;
+            }
         } else {
             // Select zone colors
             var zH, zM, zS;
@@ -617,11 +649,15 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
                 oB = zM[2] + (hB - zM[2]) * ht;
             }
 
-            // Multiply-sqrt blend: result = sqrt(overlay * diffuse)
-            // This is brighter than pure multiply, matches BL2's actual blending
-            cr = Math.sqrt(Math.max(0, oR * dr));
-            cg = Math.sqrt(Math.max(0, oG * dg));
-            cb = Math.sqrt(Math.max(0, oB * db));
+            if (maskOnly) {
+                // Zone color is the albedo. The packed diffuse is a different drawing.
+                cr = oR; cg = oG; cb = oB;
+            } else {
+                // Multiply-sqrt blend: result = sqrt(overlay * diffuse)
+                cr = Math.sqrt(Math.max(0, oR * dr));
+                cg = Math.sqrt(Math.max(0, oG * dg));
+                cb = Math.sqrt(Math.max(0, oB * db));
+            }
         }
 
         // Compute UV from pixel position for pattern/decal sampling
@@ -679,16 +715,18 @@ function _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params) {
             }
         }
 
-        // Reinhard tonemap for HDR values
-        cr = cr / (cr + 1.0);
-        cg = cg / (cg + 1.0);
-        cb = cb / (cb + 1.0);
-
-        // Contrast boost — soft curve that tapers near 1.0 to avoid clipping highlights
-        var _gain = 0.35;
-        cr = cr * (1.0 + _gain * (1.0 - cr));
-        cg = cg * (1.0 + _gain * (1.0 - cg));
-        cb = cb * (1.0 + _gain * (1.0 - cb));
+        // Reinhard plus a contrast lift assumed a dark detail texture under the
+        // zone color. That flattens a mask-only gun into gray, so weapons skip it
+        // and let HDR zone colors clip to white.
+        if (!maskOnly) {
+            cr = cr / (cr + 1.0);
+            cg = cg / (cg + 1.0);
+            cb = cb / (cb + 1.0);
+            var _gain = 0.35;
+            cr = cr * (1.0 + _gain * (1.0 - cr));
+            cg = cg * (1.0 + _gain * (1.0 - cg));
+            cb = cb * (1.0 + _gain * (1.0 - cb));
+        }
 
         // Linear to sRGB gamma
         out[i]     = Math.min(255, Math.pow(Math.max(cr, 0), 1.0 / 2.2) * 255 + 0.5) | 0;
@@ -742,12 +780,8 @@ function _loadImage(url, cb) {
     _imageCache[url] = img;
 }
 
-// Create weapon material using BL2's actual Master_Gun pipeline:
-// 1. Load zone mask (p_Masks) + diffuse detail (p_Diffuse)
-// 2. Pull per-rarity MIC params from weapon_materials.json (zone colors, decal/pattern,
-//    intensity scalars, decal/pattern colors and positions)
-// 3. Composite via _compositeBL2Texture with all overlays
-// 4. Apply normal map + PBR + reflect (envMap) + rarity emissive
+// Create weapon material from the zone mask, manufacturer colors, and pattern/decal.
+// The MIC p_Diffuse is intentionally not sampled: it is three packed atlases.
 function createTexturedWeaponMaterial(category, rarityName, elementName, manufacturer) {
     var texInfo = WEAPON_TEXTURES[category];
     if (!texInfo) return createWeaponMaterial(rarityName, elementName);
@@ -762,7 +796,7 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
     var colors = mic ? _micVectorsToColors(mic.vectors, mfr)
                      : (MANUFACTURER_COLORS[mfr] || MANUFACTURER_COLORS["default"]);
 
-    var nrmTex = _loadTexture(texInfo.nrm);
+    var nrmTex = _loadTexture(texInfo.nrm, { linear: true });
     var cacheKey = category + "_" + mfr + "_" + (rarityName || "Common");
     var pbr = MANUFACTURER_PBR[mfr] || MANUFACTURER_PBR["default"];
 
@@ -799,9 +833,9 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
         emissiveIntensity: emissiveStr,
     });
 
-    // Load mask + diffuse + (optional) pattern + decal in parallel; composite when ready.
-    var pendingLoads = 2;
-    var maskImg = null, difImg = null, patImg = null, dclImg = null;
+    // Mask plus optional pattern and decal. The packed diffuse is not loaded.
+    var pendingLoads = 1;
+    var maskImg = null, patImg = null, dclImg = null;
 
     var patUrl = mic && mic.textures && mic.textures.p_Pattern;
     var dclUrl = mic && mic.textures && mic.textures.p_Decal;
@@ -814,16 +848,13 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
 
     function tryComposite() {
         if (--pendingLoads > 0) return;
-        if (!maskImg || !difImg) {
-            // Fallback to diffuse-only with tint
-            var difTex = _loadTexture(texInfo.dif);
+        if (!maskImg) {
             var zM = colors.aM || [0.7, 0.7, 0.7];
-            mat.map = difTex;
             mat.color.setRGB(zM[0], zM[1], zM[2]);
             mat.needsUpdate = true;
             return;
         }
-        var params = {};
+        var params = { maskOnly: true };
         if (mic && mic.scalars) {
             params.shadowsIntensity = mic.scalars.p_ShadowsIntensity;
             params.highlightsIntensity = mic.scalars.p_HighlightsIntensity;
@@ -850,14 +881,13 @@ function createTexturedWeaponMaterial(category, rarityName, elementName, manufac
         console.log("BL2 compositing:", cacheKey,
             maskImg.width + "x" + maskImg.height,
             patImg ? "+pattern" : "", dclImg ? "+decal" : "");
-        var compositeTex = _compositeBL2Texture(maskImg, difImg, colors, cacheKey, params);
+        var compositeTex = _compositeBL2Texture(maskImg, null, colors, cacheKey, params);
         mat.map = compositeTex;
         mat.color.setRGB(1, 1, 1);
         mat.needsUpdate = true;
     }
 
     _loadImage(texInfo.comp, function(im) { maskImg = im; tryComposite(); });
-    _loadImage(texInfo.dif,  function(im) { difImg = im;  tryComposite(); });
     if (patUrl) _loadImage(patUrl, function(im) { patImg = im; tryComposite(); });
     if (dclUrl) _loadImage(dclUrl, function(im) { dclImg = im; tryComposite(); });
 
@@ -875,7 +905,131 @@ function createItemMaterial(rarityName) {
     });
 }
 
-// Create a textured item material using extracted game diffuse + normal maps
+// Master_ShieldGrenade would not export, so these stand in for its three zones:
+// olive body, dark recess, steel trim. Bytes, shadow / mid / highlight.
+var ITEM_SPLIT_ZONES = [
+    [[40, 42, 28], [98, 96, 58], [168, 160, 96]],
+    [[14, 14, 16], [36, 36, 40], [72, 74, 78]],
+    [[64, 68, 74], [150, 156, 164], [220, 224, 228]]
+];
+
+function _scaleByte(a, b) {
+    var product = (a * b) + 0x80;
+    return ((product >> 8) + product) >> 8;
+}
+
+function _swoopByte(a, b) {
+    if (a === 0 && b === 0) return 127;
+    if (a >= b) return 127 + ((1 - b / a) * 128) | 0;
+    return 127 - ((1 - a / b) * 127) | 0;
+}
+
+function _lerpByte(a, b, t) {
+    return _scaleByte(a, 255 - t) + _scaleByte(b, t);
+}
+
+// sqrt((top/255) * (base/255)) * 255 — BL2_skingen multiply_sqrt, alpha is opaque.
+function _sqrtByte(top, base) {
+    return Math.min(255, Math.sqrt(_scaleByte(top, base) / 255) * 255 + 0.5) | 0;
+}
+
+function _srgbCanvasTexture(canvas) {
+    var tex = new THREE.CanvasTexture(canvas);
+    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    else if (tex.encoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+    tex.flipY = false;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
+// Left half of the comp is the soft mask, right half is the hard zone id.
+// Both are stretched over the full UV, then multiply-sqrt'd with the grayscale diffuse.
+function _compositeSplitItem(compImg, difImg, cacheKey) {
+    if (_bl2CompositeCache[cacheKey]) return _bl2CompositeCache[cacheKey];
+    var w = difImg.naturalWidth || difImg.width;
+    var h = difImg.naturalHeight || difImg.height;
+    var canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(difImg, 0, 0, w, h);
+    var difPx = ctx.getImageData(0, 0, w, h).data;
+    ctx.drawImage(compImg, 0, 0, w, h);
+    var compPx = ctx.getImageData(0, 0, w, h).data;
+    var outData = ctx.createImageData(w, h);
+    var out = outData.data;
+    var half = w >> 1;
+    for (var y = 0; y < h; y++) {
+        var row = y * w;
+        for (var x = 0; x < w; x++) {
+            var sx = x >> 1;
+            var soft = (row + sx) * 4;
+            var hard = (row + sx + half) * 4;
+            var di = (row + x) * 4;
+            var hr = compPx[hard], hg = compPx[hard + 1], hb = compPx[hard + 2];
+            var zone, dom;
+            if (hr >= hg && hr >= hb) { zone = 0; dom = hr; }
+            else if (hg >= hr && hg >= hb) { zone = 1; dom = hg; }
+            else { zone = 2; dom = hb; }
+            if (dom < 40) {
+                out[di] = difPx[di];
+                out[di + 1] = difPx[di + 1];
+                out[di + 2] = difPx[di + 2];
+                out[di + 3] = 255;
+                continue;
+            }
+            var sr = compPx[soft], sg = compPx[soft + 1];
+            var mix = _swoopByte(sr, sg);
+            var cols = ITEM_SPLIT_ZONES[zone];
+            for (var c = 0; c < 3; c++) {
+                var c0 = _lerpByte(cols[1][c], cols[0][c], sg);
+                var c1 = _lerpByte(cols[1][c], cols[2][c], sr);
+                out[di + c] = _sqrtByte(_lerpByte(c0, c1, mix), difPx[di + c]);
+            }
+            out[di + 3] = 255;
+        }
+    }
+    ctx.putImageData(outData, 0, 0);
+    var tex = _srgbCanvasTexture(canvas);
+    _bl2CompositeCache[cacheKey] = tex;
+    return tex;
+}
+
+// ItemArtifacts_Comp is not an albedo. Red is a fill, green and blue are line art.
+// Mat_ItemArtifact is two-sided and masked at 0.333 on that red field.
+function _compositeRelic(img, rarityName, cacheKey) {
+    if (_bl2CompositeCache[cacheKey]) return _bl2CompositeCache[cacheKey];
+    var pal = RARITY_MATERIALS[rarityName] || RARITY_MATERIALS["Common"];
+    var br = (pal.base >> 16) & 255;
+    var bg = (pal.base >> 8) & 255;
+    var bb = pal.base & 255;
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    var canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    var src = ctx.getImageData(0, 0, w, h);
+    var px = src.data;
+    for (var i = 0; i < px.length; i += 4) {
+        var r = px[i];
+        var fill = r / 255;
+        var shade = 0.35 + 0.65 * fill;
+        var line = px[i + 1] > px[i + 2] ? px[i + 1] : px[i + 2];
+        var cr = br * shade + line * 0.9;
+        var cg = bg * shade + line * 0.95;
+        var cb = bb * shade + line * 1.1;
+        px[i] = cr > 255 ? 255 : cr | 0;
+        px[i + 1] = cg > 255 ? 255 : cg | 0;
+        px[i + 2] = cb > 255 ? 255 : cb | 0;
+        px[i + 3] = r;
+    }
+    ctx.putImageData(src, 0, 0);
+    var tex = _srgbCanvasTexture(canvas);
+    _bl2CompositeCache[cacheKey] = tex;
+    return tex;
+}
+
 function createTexturedItemMaterial(category, rarityName, charClass) {
     var texInfo = null;
     if (category === "Class Mod" && charClass) {
@@ -886,24 +1040,73 @@ function createTexturedItemMaterial(category, rarityName, charClass) {
     if (!texInfo) return createItemMaterial(rarityName);
 
     var pal = RARITY_MATERIALS[rarityName] || RARITY_MATERIALS["Common"];
-    var rarityColor = new THREE.Color(pal.base);
-    // Lighten the tint so it doesn't overpower the diffuse texture
-    var tint = rarityColor.clone().lerp(new THREE.Color(0.7, 0.7, 0.7), 0.5);
+    var emissive = new THREE.Color(pal.accent);
 
+    if (category === "Relic") {
+        var relicKey = "relic_" + (rarityName || "Common");
+        var relicMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            metalness: 0.15,
+            roughness: 0.35,
+            emissive: emissive,
+            emissiveIntensity: 0.35,
+            alphaTest: 0.333,
+            side: THREE.DoubleSide,
+        });
+        if (_bl2CompositeCache[relicKey]) relicMat.map = _bl2CompositeCache[relicKey];
+        else {
+            _loadImage(texInfo.dif, function(im) {
+                if (!im) return;
+                relicMat.map = _compositeRelic(im, rarityName || "Common", relicKey);
+                relicMat.needsUpdate = true;
+            });
+        }
+        return relicMat;
+    }
+
+    if (texInfo.comp) {
+        var splitKey = "split_" + category;
+        var splitMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            metalness: 0.45,
+            roughness: 0.42,
+            emissive: emissive,
+            emissiveIntensity: 0.06,
+        });
+        if (texInfo.nrm) {
+            splitMat.normalMap = _loadTexture(texInfo.nrm, { linear: true });
+            splitMat.normalScale = new THREE.Vector2(0.8, 0.8);
+        }
+        if (_bl2CompositeCache[splitKey]) {
+            splitMat.map = _bl2CompositeCache[splitKey];
+        } else {
+            var compImg = null, difImg = null, left = 2;
+            function ready() {
+                if (--left > 0) return;
+                if (!compImg || !difImg) return;
+                splitMat.map = _compositeSplitItem(compImg, difImg, splitKey);
+                splitMat.needsUpdate = true;
+            }
+            _loadImage(texInfo.comp, function(im) { compImg = im; ready(); });
+            _loadImage(texInfo.dif, function(im) { difImg = im; ready(); });
+        }
+        return splitMat;
+    }
+
+    // Class mods ship a real diffuse. Keep the rarity tint; orient the maps to glTF UVs.
+    var tint = new THREE.Color(pal.base).lerp(new THREE.Color(0.7, 0.7, 0.7), 0.5);
     var opts = {
         map: _loadTexture(texInfo.dif),
         color: tint,
         metalness: 0.3,
         roughness: 0.50,
-        emissive: new THREE.Color(pal.accent),
+        emissive: emissive,
         emissiveIntensity: 0.04,
     };
-
     if (texInfo.nrm) {
-        opts.normalMap = _loadTexture(texInfo.nrm);
+        opts.normalMap = _loadTexture(texInfo.nrm, { linear: true });
         opts.normalScale = new THREE.Vector2(0.7, 0.7);
     }
-
     return new THREE.MeshStandardMaterial(opts);
 }
 
@@ -959,6 +1162,7 @@ function applyCharacterTint(group, r, g, b) {
             if (p.userData && p.userData._micHeadApplied) return;
             p = p.parent;
         }
+        if (child.userData && child.userData._keepColor) return;
         if (child.isMesh && child.material) {
             var mats = Array.isArray(child.material) ? child.material : [child.material];
             for (var i = 0; i < mats.length; i++) {
@@ -1191,6 +1395,7 @@ function applySkinColors(group, zones) {
         if (subgroup.userData && subgroup.userData._micHeadApplied) return;
         subgroup.traverse(function(child) {
             if (!child.isMesh || !child.material) return;
+            if (child.userData && child.userData._keepColor) return;
             var mats = Array.isArray(child.material) ? child.material : [child.material];
             for (var idx = 0; idx < mats.length; idx++) {
                 var mat = mats[idx];
@@ -1329,12 +1534,13 @@ function applyHeadMaterial(headGroup, headAsset) {
             emissiveIntensity: 0.0,
         };
         if (nrmUrl) {
-            matOpts.normalMap = _loadTexture(nrmUrl);
+            // Keep the orientation character heads already looked right with.
+            matOpts.normalMap = _loadTexture(nrmUrl, { flipY: true });
             matOpts.normalScale = new THREE.Vector2(0.9, 0.9);
         }
         if (refUrl) {
             // Use reflect texture as an env-style sphere map for cheap shine
-            var rt = _loadTexture(refUrl);
+            var rt = _loadTexture(refUrl, { flipY: true });
             rt.mapping = THREE.EquirectangularReflectionMapping;
             matOpts.envMap = rt;
             var refCol = (mic.vectors && mic.vectors.p_ReflectColor) || [1,1,1];
@@ -1473,6 +1679,265 @@ THREE.BL2InkShader = {
         "}"
     ].join("\n"),
 };
+
+// ─── Procedural stand-ins ─────────────────────────────────
+// Extracted glTF lives in gitignored static/models. When those files are
+// absent, the viewports still get a rarity-tinted silhouette.
+// Camera for every viewer sits on +z looking toward the origin, so a face,
+// shield, or gun side that should be visible is built toward +z.
+// Local +Y on CylinderGeometry. Rz(-PI/2) maps (0,1,0) onto (1,0,0)
+// (barrel points to the viewer's right). Rx(+PI/2) maps (0,1,0) onto (0,0,1)
+// (a disc's cap faces the camera).
+
+var CLASS_SILHOUETTE = {
+    "Axton":    { build: "average", suit: 0x3e4a30, accent: 0xf0a030, skin: 0xc48a6a },
+    "Zer0":     { build: "slim",    suit: 0x3a445c, accent: 0x4b8be8, skin: 0x3a445c },
+    "Maya":     { build: "average", suit: 0x3a2456, accent: 0xb06ad4, skin: 0xc48a6a },
+    "Salvador": { build: "stocky",  suit: 0x6e2c24, accent: 0xe05040, skin: 0xa86b45 },
+    "Gaige":    { build: "average", suit: 0x3a2430, accent: 0xff4081, skin: 0xe0b090 },
+    "Krieg":    { build: "bulky",   suit: 0x6a4a34, accent: 0xe8a33a, skin: 0xc48a6a },
+};
+
+var BUILD_SCALE = {
+    slim:    { w: 0.78, h: 1.08 },
+    average: { w: 1.00, h: 1.00 },
+    stocky:  { w: 1.28, h: 0.82 },
+    bulky:   { w: 1.38, h: 1.02 },
+};
+
+var GUN_PROFILE = {
+    "Pistol":          { stock: 0.00, body: 0.34, mag: 0.12, barrel: 0.22, barrelR: 0.028, scope: 0,    fat: 0.10 },
+    "Assault Rifle":   { stock: 0.28, body: 0.46, mag: 0.22, barrel: 0.42, barrelR: 0.030, scope: 0.12, fat: 0.11 },
+    "SMG":             { stock: 0.12, body: 0.32, mag: 0.26, barrel: 0.20, barrelR: 0.026, scope: 0,    fat: 0.10 },
+    "Shotgun":         { stock: 0.26, body: 0.40, mag: 0.08, barrel: 0.48, barrelR: 0.055, scope: 0,    fat: 0.13 },
+    "Sniper Rifle":    { stock: 0.32, body: 0.40, mag: 0.14, barrel: 0.85, barrelR: 0.026, scope: 0.24, fat: 0.12 },
+    "Rocket Launcher": { stock: 0.10, body: 0.50, mag: 0.00, barrel: 0.70, barrelR: 0.090, scope: 0.10, fat: 0.16 },
+};
+
+function _phMat(hex, opts) {
+    opts = opts || {};
+    return new THREE.MeshStandardMaterial({
+        color: new THREE.Color(hex),
+        metalness: opts.metalness != null ? opts.metalness : 0.45,
+        roughness: opts.roughness != null ? opts.roughness : 0.42,
+        emissive: new THREE.Color(opts.emissive != null ? opts.emissive : 0x000000),
+        emissiveIntensity: opts.emissiveIntensity || 0,
+    });
+}
+
+function _phBox(parent, name, w, h, d, x, y, z, mat, keep) {
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.name = name;
+    mesh.position.set(x, y, z);
+    if (keep) mesh.userData._keepColor = true;
+    parent.add(mesh);
+    return mesh;
+}
+
+function _phMesh(parent, name, geometry, x, y, z, mat, keep) {
+    var mesh = new THREE.Mesh(geometry, mat);
+    mesh.name = name;
+    mesh.position.set(x, y, z);
+    if (keep) mesh.userData._keepColor = true;
+    parent.add(mesh);
+    return mesh;
+}
+
+function _rarityPal(name) {
+    return RARITY_MATERIALS[name] || RARITY_MATERIALS["Common"];
+}
+
+function _elementHex(elementName, fallbackHex) {
+    if (elementName && ELEMENT_COLORS[elementName]) return ELEMENT_COLORS[elementName];
+    return fallbackHex;
+}
+
+function buildCharacterPlaceholder(charName) {
+    var look = CLASS_SILHOUETTE[charName] || { build: "average", suit: 0x33404c, accent: 0x8eb4d4, skin: 0xc48a6a };
+    var sc = BUILD_SCALE[look.build] || BUILD_SCALE.average;
+    var W = sc.w;
+    var H = sc.h;
+    var g = new THREE.Group();
+    g.name = "placeholder-character";
+    g.userData._procedural = true;
+
+    var suit = _phMat(look.suit, { metalness: 0.22, roughness: 0.58 });
+    var skin = _phMat(look.skin, { metalness: 0.04, roughness: 0.72 });
+    var accent = _phMat(look.accent, { metalness: 0.35, roughness: 0.42, emissive: look.accent, emissiveIntensity: 0.22 });
+    var metal = _phMat(0x9aa3ad, { metalness: 0.82, roughness: 0.28 });
+
+    var legH = 0.72 * H;
+    var legW = 0.15 * W;
+    var hip = 0.11 * W;
+    _phBox(g, "leg", legW, legH, legW, -hip, legH / 2, 0, suit, true);
+    _phBox(g, "leg", legW, legH, legW, hip, legH / 2, 0, suit, true);
+
+    var torsoH = 0.52 * H;
+    var torsoY = legH + torsoH / 2;
+    _phBox(g, "torso", 0.40 * W, torsoH, 0.22 * W, 0, torsoY, 0, suit, true);
+
+    var armH = 0.46 * H;
+    var armW = 0.11 * W;
+    var armX = 0.28 * W;
+    var armY = torsoY + torsoH * 0.15;
+    // The figure faces +z (the camera). Their right hand is world -x, their left is world +x.
+    var leftIsMech = charName === "Gaige";
+    _phBox(g, "arm", armW, armH, armW, -armX, armY - armH / 2, 0, suit, true);
+    _phBox(g, leftIsMech ? "mech-arm" : "arm", armW, armH, armW, armX, armY - armH / 2, 0, leftIsMech ? metal : suit, true);
+
+    var headR = 0.15 * Math.max(H, 0.85);
+    var headY = legH + torsoH + headR * 0.85;
+    var headZ = 0.02;
+    if (charName === "Zer0") {
+        _phBox(g, "helmet", headR * 1.7, headR * 2.0, headR * 1.7, 0, headY, headZ, suit, true);
+        // Visor sits on the +z side of the helmet, toward the camera.
+        var visorMat = _phMat(look.accent, { metalness: 0.15, roughness: 0.25, emissive: look.accent, emissiveIntensity: 0.9 });
+        _phBox(g, "visor", headR * 1.5, headR * 0.42, 0.05, 0, headY, headZ + headR, visorMat, true);
+    } else {
+        _phMesh(g, "head", new THREE.SphereGeometry(headR, 16, 12), 0, headY, headZ, skin, false);
+        var eyeMat = _phMat(0x161616, { metalness: 0.1, roughness: 0.35 });
+        var eyeZ = headZ + headR * 0.92;
+        _phMesh(g, "eye", new THREE.SphereGeometry(headR * 0.18, 8, 8), -headR * 0.38, headY + headR * 0.12, eyeZ, eyeMat, true);
+        _phMesh(g, "eye", new THREE.SphereGeometry(headR * 0.18, 8, 8), headR * 0.38, headY + headR * 0.12, eyeZ, eyeMat, true);
+    }
+
+    if (charName === "Axton") {
+        // Turret pack sits on the back, -z, away from the camera. Badge is on the chest.
+        _phBox(g, "turret", 0.22 * W, 0.28 * H, 0.18 * W, 0, torsoY, -0.20, accent, true);
+        _phBox(g, "badge", 0.14 * W, 0.08 * H, 0.04, 0, torsoY + torsoH * 0.12, 0.12 * W, accent, true);
+    } else if (charName === "Maya") {
+        _phBox(g, "hair", 0.20 * W, 0.34 * H, 0.16 * W, 0, headY, headZ - headR * 1.2, accent, true);
+        _phBox(g, "siren", 0.06 * W, 0.16 * H, 0.04, armX, armY - armH * 0.35, armW, accent, true);
+    } else if (charName === "Salvador") {
+        _phBox(g, "sidearm", 0.16, 0.07, 0.08, -armX - 0.06, armY - armH, 0.06, metal, true);
+        _phBox(g, "sidearm", 0.16, 0.07, 0.08, armX + 0.06, armY - armH, 0.06, metal, true);
+    } else if (charName === "Gaige") {
+        _phMesh(g, "pigtail", new THREE.SphereGeometry(headR * 0.55, 12, 10), -headR * 1.2, headY + headR * 0.1, headZ - 0.02, accent, true);
+        _phMesh(g, "pigtail", new THREE.SphereGeometry(headR * 0.55, 12, 10), headR * 1.2, headY + headR * 0.1, headZ - 0.02, accent, true);
+        _phBox(g, "watcher", 0.16, 0.18, 0.12, armX + 0.22, 0.55 * H, 0, metal, true);
+        _phMesh(g, "watcher-eye", new THREE.SphereGeometry(0.045, 10, 8), armX + 0.22, 0.62 * H, 0.08, accent, true);
+    } else if (charName === "Krieg") {
+        // Buzz axe in the right hand, extending toward -x (screen left when facing the camera).
+        _phBox(g, "axe", 0.50, 0.07, 0.035, -(armX + 0.30), armY - armH * 0.9, 0.04, metal, true);
+    }
+    return g;
+}
+
+function buildWeaponPlaceholder(spec) {
+    spec = spec || {};
+    var category = spec.category || "Pistol";
+    var profile = GUN_PROFILE[category] || GUN_PROFILE["Pistol"];
+    var pal = _rarityPal(spec.rarityName);
+    var pbr = MANUFACTURER_PBR[spec.manufacturer] || MANUFACTURER_PBR["default"];
+    var elemHex = _elementHex(spec.elementName, pal.accent);
+    var g = new THREE.Group();
+    g.name = "placeholder-weapon";
+    g.userData._procedural = true;
+
+    var bodyMat = _phMat(pal.base, {
+        metalness: pbr.metalness, roughness: pbr.roughness,
+        emissive: pal.accent, emissiveIntensity: 0.07,
+    });
+    var darkMat = _phMat(0x1a1c20, { metalness: 0.3, roughness: 0.62 });
+    var steelMat = _phMat(0x8d9298, { metalness: 0.86, roughness: 0.28 });
+    var glowMat = _phMat(elemHex, { metalness: 0.2, roughness: 0.35, emissive: elemHex, emissiveIntensity: 0.65 });
+    var barrelMat = profile.barrelR >= 0.07 ? bodyMat : steelMat;
+
+    var x = 0;
+    if (profile.stock > 0) {
+        _phBox(g, "stock", profile.stock, profile.fat * 0.85, profile.fat * 0.7, x + profile.stock / 2, 0.02, 0, darkMat, true);
+        x += profile.stock;
+    }
+    var bodyX = x + profile.body / 2;
+    _phBox(g, "receiver", profile.body, profile.fat, profile.fat * 0.85, bodyX, 0.04, 0, bodyMat, true);
+    _phBox(g, "grip", profile.fat * 0.55, profile.fat * 1.7, profile.fat * 0.55, bodyX - profile.body * 0.15, -profile.fat * 0.85, 0, darkMat, true);
+    if (profile.mag > 0) {
+        _phBox(g, "magazine", profile.fat * 0.7, profile.mag, profile.fat * 0.55, bodyX + profile.body * 0.1, -profile.mag / 2, 0, darkMat, true);
+    }
+    x += profile.body;
+
+    var barrelLen = profile.barrel;
+    // radiusTop sits on local +Y. After Rz(-PI/2) that end is the muzzle (+x), so it is the narrower one.
+    var barrel = _phMesh(g, "barrel", new THREE.CylinderGeometry(profile.barrelR * 0.92, profile.barrelR, barrelLen, 12), x + barrelLen / 2, 0.045, 0, barrelMat, true);
+    barrel.rotation.z = -Math.PI / 2;
+    if (category === "Shotgun") {
+        _phBox(g, "pump", barrelLen * 0.38, profile.barrelR * 3.2, profile.barrelR * 3.2, x + barrelLen * 0.42, 0.045, 0, darkMat, true);
+    }
+    var muzzleX = x + barrelLen;
+    var muzzle = _phMesh(g, "muzzle", new THREE.SphereGeometry(Math.max(0.03, profile.barrelR * 0.85), 10, 8), muzzleX, 0.045, 0, glowMat, true);
+    muzzle.userData._keepColor = true;
+
+    if (profile.scope > 0) {
+        _phBox(g, "scope", profile.scope, profile.fat * 0.55, profile.fat * 0.55, bodyX + profile.body * 0.15, profile.fat * 0.85, 0, darkMat, true);
+        _phMesh(g, "scope-glass", new THREE.SphereGeometry(profile.fat * 0.22, 10, 8), bodyX + profile.body * 0.15 + profile.scope * 0.4, profile.fat * 0.85, 0, glowMat, true);
+    }
+    return g;
+}
+
+function buildItemPlaceholder(spec) {
+    spec = spec || {};
+    var category = spec.category || "Relic";
+    var pal = _rarityPal(spec.rarityName);
+    var elemHex = _elementHex(spec.elementName, pal.accent);
+    var g = new THREE.Group();
+    g.name = "placeholder-item";
+    g.userData._procedural = true;
+    var bodyMat = _phMat(pal.base, { metalness: 0.55, roughness: 0.36, emissive: pal.accent, emissiveIntensity: 0.1 });
+    var glowMat = _phMat(elemHex, { metalness: 0.25, roughness: 0.32, emissive: elemHex, emissiveIntensity: 0.6 });
+
+    if (category === "Shield") {
+        var disc = _phMesh(g, "shield-face", new THREE.CylinderGeometry(0.62, 0.62, 0.07, 6), 0, 0, 0, bodyMat, true);
+        // Local +Y is the cap normal. Rx(+PI/2) sends (0,1,0) to (0,0,1), toward the camera.
+        disc.rotation.x = Math.PI / 2;
+        var ring = _phMesh(g, "shield-ring", new THREE.TorusGeometry(0.46, 0.028, 8, 6), 0, 0, 0.05, glowMat, true);
+        // TorusGeometry already lies in the XY plane, so the ring faces +z as built.
+        ring.position.z = 0.05;
+        _phMesh(g, "shield-core", new THREE.SphereGeometry(0.16, 16, 12), 0, 0, 0.1, glowMat, true);
+    } else if (category === "Grenade Mod") {
+        _phMesh(g, "grenade", new THREE.SphereGeometry(0.34, 20, 14), 0, 0, 0, bodyMat, true);
+        var band = _phMesh(g, "grenade-band", new THREE.TorusGeometry(0.30, 0.04, 12, 28), 0, 0, 0, glowMat, true);
+        // Rx(+PI/2) lays the ring around the vertical axis so it reads as a stripe.
+        band.rotation.x = Math.PI / 2;
+        _phMesh(g, "pin", new THREE.CylinderGeometry(0.018, 0.018, 0.22, 8), 0, 0.44, 0, _phMat(0xd5d5d5, { metalness: 0.9, roughness: 0.2 }), true);
+        _phBox(g, "lever", 0.05, 0.16, 0.04, 0.08, 0.28, 0.22, _phMat(0x222222, { metalness: 0.4, roughness: 0.5 }), true);
+    } else if (category === "Class Mod") {
+        var look = CLASS_SILHOUETTE[spec.charClass] || { accent: pal.accent, suit: 0x2a3038 };
+        var stripeMat = _phMat(look.accent, { metalness: 0.4, roughness: 0.4, emissive: look.accent, emissiveIntensity: 0.35 });
+        _phBox(g, "classmod", 0.46, 0.78, 0.16, 0, 0, 0, _phMat(0x242830, { metalness: 0.5, roughness: 0.45, emissive: pal.accent, emissiveIntensity: 0.05 }), true);
+        _phBox(g, "classmod-stripe", 0.48, 0.12, 0.18, 0, 0.2, 0, stripeMat, true);
+        _phMesh(g, "classmod-core", new THREE.SphereGeometry(0.07, 12, 10), 0, -0.08, 0.1, glowMat, true);
+    } else {
+        _phMesh(g, "relic", new THREE.OctahedronGeometry(0.42), 0, 0.12, 0, _phMat(pal.base, { metalness: 0.15, roughness: 0.22, emissive: pal.accent, emissiveIntensity: 0.45 }), true);
+        _phBox(g, "relic-base", 0.36, 0.08, 0.36, 0, -0.28, 0, _phMat(0x2a2418, { metalness: 0.4, roughness: 0.55 }), true);
+    }
+    return g;
+}
+
+function buildProceduralModel(spec) {
+    spec = spec || {};
+    var kind = spec.kind || "item";
+    if (kind === "character") return buildCharacterPlaceholder(spec.name);
+    if (kind === "weapon") return buildWeaponPlaceholder(spec);
+    return buildItemPlaceholder(spec);
+}
+
+// Scale and seat a loaded group so its bottom rests on y=0 and its longest
+// side matches fitHeight. Translation only: no extra yaw, so a +z face stays
+// toward the camera and a +x barrel stays to the right.
+function fitLoadedGroup(group, fitHeight) {
+    var box = new THREE.Box3().setFromObject(group);
+    var size = box.getSize(new THREE.Vector3());
+    var center = box.getCenter(new THREE.Vector3());
+    var maxDim = Math.max(size.x, size.y, size.z);
+    if (!(maxDim > 0)) maxDim = 1;
+    var scale = fitHeight / maxDim;
+    group.scale.setScalar(scale);
+    group.position.x = -center.x * scale;
+    group.position.y = -box.min.y * scale;
+    group.position.z = -center.z * scale;
+    group.updateMatrixWorld(true);
+    return scale;
+}
 
 // ─── Viewer Factory ───────────────────────────────────────
 function createViewer(containerId) {
@@ -1652,34 +2117,21 @@ function createViewer(containerId) {
             var onLoadedCb = opts.onLoaded || null;
 
             if (!Array.isArray(urls)) urls = [urls];
-            var GLTFLoaderClass = THREE.GLTFLoader;
-            if (!GLTFLoaderClass) { console.warn("GLTFLoader not available"); return; }
-            var loader = new GLTFLoaderClass();
+            urls = urls.filter(function(u) { return !!u; });
             var group = new THREE.Group();
-            var loaded = 0;
-            var failed = 0;
-            var total = urls.length;
 
-            function onDone() {
-                if (failed >= total) return;
+            function finish(usedFallback) {
+                if (group.children.length === 0) return;
                 // Sort children by load index to guarantee deterministic order
                 // (async loads can complete in any order)
                 group.children.sort(function(a, b) {
                     return (a.userData._loadIndex || 0) - (b.userData._loadIndex || 0);
                 });
-                if (overrideMaterial) {
+                // Textured overrides expect a real glTF. Stand-ins keep their own materials.
+                if (!usedFallback && overrideMaterial) {
                     applyMaterialOverride(group, overrideMaterial);
                 }
-                var box = new THREE.Box3().setFromObject(group);
-                var size = box.getSize(new THREE.Vector3());
-                var center = box.getCenter(new THREE.Vector3());
-                var maxDim = Math.max(size.x, size.y, size.z);
-                if (maxDim === 0) maxDim = 1;
-                var scale = fitHeight / maxDim;
-                group.scale.setScalar(scale);
-                group.position.x = -center.x * scale;
-                group.position.y = -box.min.y * scale;
-                group.position.z = -center.z * scale;
+                fitLoadedGroup(group, fitHeight);
 
                 self.currentModel = group;
                 currentModel = group;
@@ -1693,22 +2145,56 @@ function createViewer(containerId) {
                 if (onLoadedCb) onLoadedCb(group);
             }
 
+            function useFallback() {
+                var ph = buildProceduralModel(opts.fallback);
+                if (!ph) return;
+                ph.userData._loadIndex = 0;
+                ph.userData._procedural = true;
+                group.userData._procedural = true;
+                group.add(ph);
+                finish(true);
+            }
+
+            if (!urls.length) {
+                useFallback();
+                return;
+            }
+
+            var GLTFLoaderClass = THREE.GLTFLoader;
+            if (!GLTFLoaderClass) {
+                console.warn("GLTFLoader not available");
+                useFallback();
+                return;
+            }
+            var loader = new GLTFLoaderClass();
+            var loaded = 0;
+            var failed = 0;
+            var total = urls.length;
+
             function tryFinish() {
                 loaded++;
-                if (loaded >= total) onDone();
+                if (loaded < total) return;
+                if (failed >= total || group.children.length === 0) useFallback();
+                else finish(false);
             }
 
             for (var i = 0; i < urls.length; i++) {
                 (function(url, idx) {
-                    loader.load(url, function(gltf) {
-                        gltf.scene.userData._loadIndex = idx;
-                        group.add(gltf.scene);
-                        tryFinish();
-                    }, undefined, function(err) {
+                    try {
+                        loader.load(url, function(gltf) {
+                            gltf.scene.userData._loadIndex = idx;
+                            group.add(gltf.scene);
+                            tryFinish();
+                        }, undefined, function(err) {
+                            console.warn("Failed to load:", url);
+                            failed++;
+                            tryFinish();
+                        });
+                    } catch (err) {
                         console.warn("Failed to load:", url);
                         failed++;
                         tryFinish();
-                    });
+                    }
                 })(urls[i], i);
             }
         },
@@ -1820,6 +2306,7 @@ function loadCharacterModel(charName, appearanceColors, headAsset, skinAsset) {
     var _pendingSkin = skinAsset || null;
     charViewer.loadModel([info.body, headUrl], {
         fitHeight: 2.0, cameraY: 0.9, spin: 0.004,
+        fallback: { kind: "character", name: charName },
         onLoaded: function(group) {
             // Apply per-head MIC material (real diffuse/mask/normal/reflect/decal/pattern + zone colors)
             // BEFORE skin recolor — applyHeadMaterial flags the head subgroup so applySkinColors
@@ -1900,12 +2387,18 @@ function showEquipmentInViewer(category, rarityName, elementName, charClass, man
         mat = createTexturedItemMaterial(category, rarityName || "Common");
     }
 
-    if (!url) {
-        if (_currentCharName) loadCharacterModel(_currentCharName);
-        return;
-    }
-
-    var loadOpts = { fitHeight: 1.5, cameraY: 0.5, spin: 0.006, material: mat };
+    var isWeapon = weaponCategories.indexOf(category) !== -1;
+    var loadOpts = {
+        fitHeight: 1.5, cameraY: 0.5, spin: 0.006, material: mat,
+        fallback: {
+            kind: isWeapon ? "weapon" : "item",
+            category: category,
+            rarityName: rarityName || "Common",
+            elementName: elementName || null,
+            manufacturer: manufacturer || null,
+            charClass: charClass || null,
+        },
+    };
     if (gestaltCategories.indexOf(category) !== -1) {
         loadOpts.onLoaded = function(group) {
             if (partPaths && partPaths.length && _gestaltMap && _partMeshNames) {
@@ -1915,7 +2408,7 @@ function showEquipmentInViewer(category, rarityName, elementName, charClass, man
             }
         };
     }
-    charViewer.loadModel([url], loadOpts);
+    charViewer.loadModel(url ? [url] : [], loadOpts);
     charViewer.setAccentLight(rarityName || "Common", elementName);
     _updateViewportOverlay();
 }
@@ -2013,9 +2506,17 @@ function initPreviewViewer(containerId) {
 function loadWeaponPreview(category, rarityName, elementName, manufacturer, partPaths) {
     if (!previewViewer) return;
     var url = WEAPON_MODELS[category];
-    if (!url) return;
     var mat = createTexturedWeaponMaterial(category, rarityName || "Common", elementName, manufacturer);
-    var loadOpts = { fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat };
+    var loadOpts = {
+        fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat,
+        fallback: {
+            kind: "weapon",
+            category: category,
+            rarityName: rarityName || "Common",
+            elementName: elementName || null,
+            manufacturer: manufacturer || null,
+        },
+    };
     loadOpts.onLoaded = function(group) {
         if (partPaths && partPaths.length && _gestaltMap && _partMeshNames) {
             applyGestaltSectionVisibility(group, category, partPaths);
@@ -2023,10 +2524,10 @@ function loadWeaponPreview(category, rarityName, elementName, manufacturer, part
             applyGestaltManufacturerFallback(group, category, manufacturer);
         }
     };
-    previewViewer.loadModel([url], loadOpts);
+    previewViewer.loadModel(url ? [url] : [], loadOpts);
 }
 
-function loadItemPreview(category, charClass, rarityName) {
+function loadItemPreview(category, charClass, rarityName, elementName) {
     if (!previewViewer) return;
     var url;
     if (category === "Class Mod" && charClass) {
@@ -2034,9 +2535,17 @@ function loadItemPreview(category, charClass, rarityName) {
     } else {
         url = ITEM_MODELS[category];
     }
-    if (!url) return;
     var mat = createTexturedItemMaterial(category, rarityName || "Common", charClass);
-    previewViewer.loadModel([url], { fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat });
+    previewViewer.loadModel(url ? [url] : [], {
+        fitHeight: 1.5, cameraY: 0.5, spin: 0.005, material: mat,
+        fallback: {
+            kind: "item",
+            category: category,
+            charClass: charClass || null,
+            rarityName: rarityName || "Common",
+            elementName: elementName || null,
+        },
+    });
 }
 
 function updatePreviewMaterial(rarityName, elementName, isWeapon) {

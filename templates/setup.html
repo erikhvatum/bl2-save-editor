@@ -160,7 +160,7 @@
 
             <div class="field">
                 <label>Gibbed Data Directory</label>
-                <div class="hint">Required for item import/export</div>
+                <div class="hint">Required for weapon and item names, and for code import/export</div>
                 <input type="text" id="f-gibbed-dir">
                 <div class="status" id="s-gibbed-dir"></div>
             </div>
@@ -215,7 +215,7 @@
             else setStatus("s-game-dir", "Not found - optional", "warn");
 
             if (data.gibbed_dir) setStatus("s-gibbed-dir", "Auto-detected", "ok");
-            else setStatus("s-gibbed-dir", "Not found - item import/export will be unavailable", "warn");
+            else setStatus("s-gibbed-dir", "Not found - weapon and item names will be unavailable", "warn");
 
             if (data.borderlands2_tool_dir) setStatus("s-tool-dir", "Auto-detected", "ok");
             else setStatus("s-tool-dir", "Not found - required for save reading", "err");

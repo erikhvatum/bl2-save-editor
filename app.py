@@ -777,6 +777,7 @@ def api_edit_weapon(filename, field, idx):
                     if ref:
                         item_values[6 + i] = (ref[0] << cfg_parts["asset_bits"]) | ref[1]
 
+        item_values = save_io._sanitize_item_values(is_weapon, item_values)
         sub[1][0][1] = save_io.wrap_item(is_weapon, item_values, key)
         entry[1] = write_protobuf(sub)
         # Project Paris Bug 12: warn_only so pre-existing corrupt items don't block this edit
@@ -888,6 +889,7 @@ def api_add_item(filename):
                 part_values.append(NONE_16)
 
         values = [set_id, type_packed, bal_packed, mfr_packed, level, level] + part_values
+        values = save_io._sanitize_item_values(0, values)
         save_io.add_item(filename, values)
         return jsonify({"ok": True})
     except Exception as e:
@@ -945,7 +947,7 @@ def api_customizations(class_name):
     gibbed_items_path = os.path.join(gibbed_dir, "Items.json")
     if not os.path.exists(gibbed_items_path):
         return jsonify({"heads": [], "skins": []})
-    with open(gibbed_items_path) as f:
+    with open(gibbed_items_path, encoding="utf-8-sig") as f:
         items = _json.load(f)
 
     CLASS_PREFIXES = {
@@ -1305,7 +1307,7 @@ if __name__ == "__main__":
     elif not os.path.isdir(cfg["save_dir"]):
         log.warning(f"Save directory does not exist: {cfg['save_dir']}")
     if not cfg.get("gibbed_dir"):
-        log.warning("Gibbed data not found. Weapon import/export will be unavailable.")
+        log.warning("Gibbed data not found. Weapon and item names will be unavailable.")
     if not cfg.get("borderlands2_tool_dir"):
         log.warning("borderlands2-tool not found. Save reading may fail.")
 
