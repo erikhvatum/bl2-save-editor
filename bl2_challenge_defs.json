@@ -1,0 +1,2020 @@
+{
+ "_source": "Derived from apocalyptech/borderlands2 (bl2_data.create_bl2_challenges). Maps StatsData (save field 15) challenge ids to definitions.",
+ "challenges": [
+  {
+   "id": 1621,
+   "id_text": "GD_Challenges.GeneralCombat.General_RoundsFired",
+   "name": "Knee-Deep in Brass",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    1000,
+    5000,
+    10000,
+    25000,
+    50000
+   ]
+  },
+  {
+   "id": 1630,
+   "id_text": "GD_Challenges.Loot.Loot_PickUpWeapons",
+   "name": "Gun Runner",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1632,
+   "id_text": "GD_Challenges.enemies.Enemies_KillSkags",
+   "name": "Skags to Riches",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1633,
+   "id_text": "GD_Challenges.Weapons.Pistol_Kills",
+   "name": "The Killer",
+   "category": "Pistol",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1634,
+   "id_text": "GD_Challenges.Weapons.Shotgun_Kills",
+   "name": "Shotgun!",
+   "category": "Shotgun",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1635,
+   "id_text": "GD_Challenges.Weapons.SMG_Kills",
+   "name": "Hail of Bullets",
+   "category": "SMG",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1636,
+   "id_text": "GD_Challenges.Weapons.SniperRifle_Kills",
+   "name": "Longshot",
+   "category": "Sniper Rifle",
+   "dlc": 0,
+   "levels": [
+    20,
+    100,
+    500,
+    2500,
+    5000
+   ]
+  },
+  {
+   "id": 1637,
+   "id_text": "GD_Challenges.Weapons.AssaultRifle_Kills",
+   "name": "Aggravated Assault",
+   "category": "Assault Rifle",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1639,
+   "id_text": "GD_Challenges.Grenades.Grenade_Kills",
+   "name": "Pull the Pin",
+   "category": "Grenades",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1640,
+   "id_text": "GD_Challenges.Vehicles.Vehicles_KillByRamming",
+   "name": "Hit-and-Fun",
+   "category": "Vehicle",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1641,
+   "id_text": "GD_Challenges.Vehicles.Vehicles_KillsWithVehicleWeapon",
+   "name": "Turret Syndrome",
+   "category": "Vehicle",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1642,
+   "id_text": "GD_Challenges.elemental.Elemental_KillEnemiesCorrosive",
+   "name": "Acid Trip",
+   "category": "Elemental",
+   "dlc": 0,
+   "levels": [
+    20,
+    75,
+    250,
+    600,
+    1000
+   ]
+  },
+  {
+   "id": 1645,
+   "id_text": "GD_Challenges.elemental.Elemental_KillEnemiesExplosive",
+   "name": "Boom.",
+   "category": "Elemental",
+   "dlc": 0,
+   "levels": [
+    20,
+    75,
+    250,
+    600,
+    1000
+   ]
+  },
+  {
+   "id": 1646,
+   "id_text": "GD_Challenges.GeneralCombat.Kills_FromCrits",
+   "name": "Critical Acclaim",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    20,
+    100,
+    500,
+    1000,
+    1500
+   ]
+  },
+  {
+   "id": 1650,
+   "id_text": "GD_Challenges.Melee.Melee_Kills",
+   "name": "Fisticuffs!",
+   "category": "Melee",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1651,
+   "id_text": "GD_Challenges.enemies.Enemies_KillBullymongs",
+   "name": "Bully the Bullies",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    25,
+    50,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1652,
+   "id_text": "GD_Challenges.enemies.Enemies_KillCrystalisks",
+   "name": "Crystals are a Girl's Best Friend",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    50,
+    80,
+    120
+   ]
+  },
+  {
+   "id": 1653,
+   "id_text": "GD_Challenges.enemies.Enemies_KillGoliaths",
+   "name": "WHY SO MUCH HURT?!",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    50,
+    80,
+    120
+   ]
+  },
+  {
+   "id": 1654,
+   "id_text": "GD_Challenges.enemies.Enemies_KillEngineers",
+   "name": "Paingineering",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1655,
+   "id_text": "GD_Challenges.enemies.Enemies_KillLoaders",
+   "name": "Load and Lock",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    20,
+    100,
+    500,
+    1000,
+    1500
+   ]
+  },
+  {
+   "id": 1658,
+   "id_text": "GD_Challenges.enemies.Enemies_KillSurveyors",
+   "name": "Just a Moment of Your Time...",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1659,
+   "id_text": "GD_Challenges.Dueling.DuelsWon_HatersGonnaHate",
+   "name": "Haters Gonna Hate",
+   "category": "Miscellaneous",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1663,
+   "id_text": "GD_Challenges.Weapons.Pistol_CriticalHits",
+   "name": "Deadeye",
+   "category": "Pistol",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1664,
+   "id_text": "GD_Challenges.Weapons.Shotgun_CriticalHits",
+   "name": "Faceful of Buckshot",
+   "category": "Shotgun",
+   "dlc": 0,
+   "levels": [
+    50,
+    250,
+    1000,
+    2500,
+    5000
+   ]
+  },
+  {
+   "id": 1665,
+   "id_text": "GD_Challenges.Weapons.SMG_CriticalHits",
+   "name": "Constructive Criticism",
+   "category": "SMG",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1666,
+   "id_text": "GD_Challenges.Weapons.Sniper_CriticalHits",
+   "name": "Longshot Headshot",
+   "category": "Sniper Rifle",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1667,
+   "id_text": "GD_Challenges.Weapons.AssaultRifle_CriticalHits",
+   "name": "This Is My Rifle...",
+   "category": "Assault Rifle",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1669,
+   "id_text": "GD_Challenges.Loot.Loot_OpenChests",
+   "name": "The Call of Booty",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    5,
+    25,
+    50,
+    125,
+    250
+   ]
+  },
+  {
+   "id": 1670,
+   "id_text": "GD_Challenges.Loot.Loot_OpenLootables",
+   "name": "Open Pandora's Boxes",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    50,
+    250,
+    750,
+    1500,
+    2500
+   ]
+  },
+  {
+   "id": 1675,
+   "id_text": "GD_Challenges.enemies.Enemies_KillConstructors",
+   "name": "Constructor Destructor",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    5,
+    12,
+    20,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1678,
+   "id_text": "GD_Challenges.Economy.Economy_SellItems",
+   "name": "Wholesale",
+   "category": "Money and Trading",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1693,
+   "id_text": "GD_Challenges.enemies.Enemies_KillMarauders",
+   "name": "Marauder? I Hardly Know 'Er!",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    20,
+    100,
+    500,
+    1000,
+    1500
+   ]
+  },
+  {
+   "id": 1694,
+   "id_text": "GD_Challenges.enemies.Enemies_KillNomads",
+   "name": "You (No)Mad, Bro?",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1695,
+   "id_text": "GD_Challenges.enemies.Enemies_KillPsychos",
+   "name": "Mama's Boys",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    50,
+    100,
+    150,
+    300,
+    500
+   ]
+  },
+  {
+   "id": 1696,
+   "id_text": "GD_Challenges.enemies.Enemies_KillRats",
+   "name": "You Dirty Rat",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1698,
+   "id_text": "GD_Challenges.Miscellaneous.Misc_CompleteChallenges",
+   "name": "Yo Dawg I Herd You Like Challenges",
+   "category": "Miscellaneous",
+   "dlc": 0,
+   "levels": [
+    5,
+    25,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1702,
+   "id_text": "GD_Challenges.GeneralCombat.Player_KillsWithActionSkill",
+   "name": "...To Pay the Bills",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    20,
+    75,
+    250,
+    600,
+    1000
+   ]
+  },
+  {
+   "id": 1732,
+   "id_text": "GD_Challenges.enemies.Enemies_KillVarkidPods",
+   "name": "Pod Pew Pew",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    45,
+    70,
+    100
+   ]
+  },
+  {
+   "id": 1742,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_Raid1",
+   "name": "Hyperius the Not-So-Invincible",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    1,
+    3,
+    5,
+    10,
+    15
+   ]
+  },
+  {
+   "id": 1743,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_Crystals",
+   "name": "In The Pink",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    80,
+    160,
+    240,
+    320,
+    400
+   ]
+  },
+  {
+   "id": 1744,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_Raid3",
+   "name": "Master Worm Food",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    1,
+    3,
+    5,
+    10,
+    15
+   ]
+  },
+  {
+   "id": 1745,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_KillWorms",
+   "name": "Worm Killer",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    10,
+    20,
+    30,
+    50,
+    80
+   ]
+  },
+  {
+   "id": 1746,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_KillBandits",
+   "name": "Land Lubber",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    50,
+    100,
+    150,
+    200,
+    250
+   ]
+  },
+  {
+   "id": 1747,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_KillHovercrafts",
+   "name": "Hovernator",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    5,
+    10,
+    15,
+    20,
+    30
+   ]
+  },
+  {
+   "id": 1748,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_PirateChests",
+   "name": "Pirate Booty",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    25,
+    75,
+    150,
+    250,
+    375
+   ]
+  },
+  {
+   "id": 1750,
+   "id_text": "GD_Sage_Challenges.Challenges.Challenge_Sage_KillDrifters",
+   "name": "Harder They Fall",
+   "category": "Hammerlock's Hunt",
+   "dlc": 4,
+   "levels": [
+    5,
+    15,
+    30,
+    40,
+    50
+   ]
+  },
+  {
+   "id": 1751,
+   "id_text": "GD_Sage_Challenges.Challenges.Challenge_Sage_KillFanBoats",
+   "name": "Fan Boy",
+   "category": "Hammerlock's Hunt",
+   "dlc": 4,
+   "levels": [
+    5,
+    10,
+    15,
+    20,
+    30
+   ]
+  },
+  {
+   "id": 1752,
+   "id_text": "GD_Sage_Challenges.Challenges.Challenge_Sage_KillSavages",
+   "name": "Savage Bloody Savage",
+   "category": "Hammerlock's Hunt",
+   "dlc": 4,
+   "levels": [
+    20,
+    50,
+    100,
+    250,
+    500
+   ]
+  },
+  {
+   "id": 1753,
+   "id_text": "GD_Sage_Challenges.Challenges.Challenge_Sage_RaidBossA",
+   "name": "Voracidous the Invincible",
+   "category": "Hammerlock's Hunt",
+   "dlc": 4,
+   "levels": [
+    1,
+    3,
+    5,
+    10,
+    15
+   ]
+  },
+  {
+   "id": 1754,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillDragons",
+   "name": "Fus Roh Die",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    10,
+    20,
+    50,
+    80,
+    110
+   ]
+  },
+  {
+   "id": 1755,
+   "id_text": "GD_Orchid_Challenges.Challenges.Challenge_Orchid_Purchase",
+   "name": "Shady Dealings",
+   "category": "Pirate's Booty",
+   "dlc": 1,
+   "levels": [
+    1,
+    3,
+    5,
+    10,
+    15
+   ]
+  },
+  {
+   "id": 1756,
+   "id_text": "GD_Iris_Challenges.Challenges.Challenge_Iris_KillMotorcycles",
+   "name": "Bikes Destroyed",
+   "category": "Campaign of Carnage",
+   "dlc": 3,
+   "levels": [
+    10,
+    20,
+    30,
+    50,
+    80
+   ]
+  },
+  {
+   "id": 1757,
+   "id_text": "GD_Iris_Challenges.Challenges.Challenge_Iris_KillBikers",
+   "name": "Bikers Killed",
+   "category": "Campaign of Carnage",
+   "dlc": 3,
+   "levels": [
+    50,
+    100,
+    150,
+    200,
+    250
+   ]
+  },
+  {
+   "id": 1758,
+   "id_text": "GD_Iris_Challenges.Challenges.Challenge_Iris_CompleteBattles",
+   "name": "Battles Completed",
+   "category": "Campaign of Carnage",
+   "dlc": 3,
+   "levels": [
+    1,
+    4,
+    8,
+    12
+   ]
+  },
+  {
+   "id": 1759,
+   "id_text": "GD_Iris_Challenges.Challenges.Challenge_Iris_Raid1",
+   "name": "Pete The Invincible Defeated",
+   "category": "Campaign of Carnage",
+   "dlc": 3,
+   "levels": [
+    1,
+    3,
+    5,
+    10,
+    15
+   ]
+  },
+  {
+   "id": 1762,
+   "id_text": "GD_Challenges.Weapons.Launcher_Kills",
+   "name": "Rocket and Roll",
+   "category": "Rocket Launcher",
+   "dlc": 0,
+   "levels": [
+    10,
+    50,
+    100,
+    250,
+    500
+   ]
+  },
+  {
+   "id": 1768,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillGolems",
+   "name": "Rock Out With Your Rock Out",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    10,
+    25,
+    50,
+    80,
+    120
+   ]
+  },
+  {
+   "id": 1769,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillKnights",
+   "name": "Knighty Knight",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    10,
+    25,
+    75,
+    120,
+    175
+   ]
+  },
+  {
+   "id": 1770,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillMimics",
+   "name": "Can't Fool Me",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    5,
+    15,
+    30,
+    50,
+    75
+   ]
+  },
+  {
+   "id": 1771,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillOrcs",
+   "name": "Orcs Should Perish",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    50,
+    100,
+    150,
+    200,
+    250
+   ]
+  },
+  {
+   "id": 1772,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillSkeletons",
+   "name": "Bone Breaker",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    50,
+    100,
+    150,
+    200,
+    250
+   ]
+  },
+  {
+   "id": 1773,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillSpiders",
+   "name": "Ew Ew Ew Ew",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    25,
+    50,
+    100,
+    150,
+    200
+   ]
+  },
+  {
+   "id": 1774,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillTreants",
+   "name": "Cheerful Green Giants",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    10,
+    20,
+    50,
+    80,
+    120
+   ]
+  },
+  {
+   "id": 1775,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillWizards",
+   "name": "Magical Massacre",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    10,
+    20,
+    50,
+    80,
+    120
+   ]
+  },
+  {
+   "id": 1791,
+   "id_text": "GD_Challenges.enemies.Enemies_KillSpiderants",
+   "name": "Pest Control",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1792,
+   "id_text": "GD_Challenges.enemies.Enemies_KillStalkers",
+   "name": "You're One Ugly Mother...",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1793,
+   "id_text": "GD_Challenges.enemies.Enemies_KillThreshers",
+   "name": "Tentacle Obsession",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1794,
+   "id_text": "GD_Challenges.enemies.Enemies_KillVarkid",
+   "name": "Another Bug Hunt",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1795,
+   "id_text": "GD_Challenges.enemies.Enemies_KillGyros",
+   "name": "Die in the Friendly Skies",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    45,
+    70,
+    100
+   ]
+  },
+  {
+   "id": 1796,
+   "id_text": "GD_Challenges.enemies.Enemies_KillMidgets",
+   "name": "Little Person, Big Pain",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1797,
+   "id_text": "GD_Challenges.Weapons.AssaultRifle_KillsCrouched",
+   "name": "Crouching Tiger, Hidden Assault Rifle",
+   "category": "Assault Rifle",
+   "dlc": 0,
+   "levels": [
+    25,
+    75,
+    400,
+    1600,
+    3200
+   ]
+  },
+  {
+   "id": 1798,
+   "id_text": "GD_Challenges.Weapons.SniperRifle_KillsFromHip",
+   "name": "No Scope, No Problem",
+   "category": "Sniper Rifle",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1800,
+   "id_text": "GD_Challenges.Weapons.Pistol_KillsQuickshot",
+   "name": "Quickdraw",
+   "category": "Pistol",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1803,
+   "id_text": "GD_Challenges.Miscellaneous.Missions_OptionalObjectivesCompleted",
+   "name": "Compl33tionist",
+   "category": "Miscellaneous",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    45,
+    70,
+    100
+   ]
+  },
+  {
+   "id": 1804,
+   "id_text": "GD_Challenges.Miscellaneous.Missions_SideMissionsCompleted",
+   "name": "Sidejacked",
+   "category": "Miscellaneous",
+   "dlc": 0,
+   "levels": [
+    5,
+    15,
+    30,
+    55,
+    90
+   ]
+  },
+  {
+   "id": 1805,
+   "id_text": "GD_Challenges.Economy.Trade_ItemsWithPlayers",
+   "name": "Psst, Hey Buddy...",
+   "category": "Money and Trading",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1806,
+   "id_text": "GD_Challenges.Weapons.Shotgun_KillsPointBlank",
+   "name": "Open Wide!",
+   "category": "Shotgun",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1807,
+   "id_text": "GD_Challenges.Weapons.Shotgun_KillsLongRange",
+   "name": "Shotgun Sniper",
+   "category": "Shotgun",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1808,
+   "id_text": "GD_Challenges.Weapons.Launcher_KillsLongRange",
+   "name": "Sky Rockets in Flight...",
+   "category": "Rocket Launcher",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1810,
+   "id_text": "GD_Challenges.Economy.Economy_BuyItemsWithEridium",
+   "name": "Whaddaya Buyin'?",
+   "category": "Money and Trading",
+   "dlc": 0,
+   "levels": [
+    2,
+    5,
+    9,
+    14,
+    20
+   ]
+  },
+  {
+   "id": 1821,
+   "id_text": "GD_Challenges.Weapons.Pistol_SecondWinds",
+   "name": "Hard Boiled",
+   "category": "Pistol",
+   "dlc": 0,
+   "levels": [
+    2,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1822,
+   "id_text": "GD_Challenges.Weapons.Shotgun_SecondWinds",
+   "name": "Lock, Stock, and...",
+   "category": "Shotgun",
+   "dlc": 0,
+   "levels": [
+    2,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1823,
+   "id_text": "GD_Challenges.Weapons.SMG_SecondWinds",
+   "name": "More Like Submachine FUN",
+   "category": "SMG",
+   "dlc": 0,
+   "levels": [
+    2,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1824,
+   "id_text": "GD_Challenges.Weapons.Sniper_SecondWinds",
+   "name": "Leaf on the Second Wind",
+   "category": "Sniper Rifle",
+   "dlc": 0,
+   "levels": [
+    2,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1825,
+   "id_text": "GD_Challenges.Weapons.AssaultRifle_SecondWinds",
+   "name": "From My Cold, Dead Hands",
+   "category": "Assault Rifle",
+   "dlc": 0,
+   "levels": [
+    5,
+    15,
+    30,
+    50,
+    75
+   ]
+  },
+  {
+   "id": 1828,
+   "id_text": "GD_Challenges.Weapons.Launcher_SecondWinds",
+   "name": "Gone with the Second Wind",
+   "category": "Rocket Launcher",
+   "dlc": 0,
+   "levels": [
+    2,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1833,
+   "id_text": "GD_Challenges.Player.Player_SecondWindFromCorrosive",
+   "name": "Green Meanie",
+   "category": "Health and Recovery",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1834,
+   "id_text": "GD_Challenges.Player.Player_SecondWindFromFire",
+   "name": "Death, Wind, and Fire",
+   "category": "Health and Recovery",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1835,
+   "id_text": "GD_Challenges.Player.Player_SecondWindFromShock",
+   "name": "I'm Back! Shocked?",
+   "category": "Health and Recovery",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1841,
+   "id_text": "GD_Challenges.Weapons.Pistol_CriticalHitKills",
+   "name": "Pistolero",
+   "category": "Pistol",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1842,
+   "id_text": "GD_Challenges.Weapons.Shotgun_CriticalHitKills",
+   "name": "Shotgun Surgeon",
+   "category": "Shotgun",
+   "dlc": 0,
+   "levels": [
+    10,
+    50,
+    100,
+    250,
+    500
+   ]
+  },
+  {
+   "id": 1843,
+   "id_text": "GD_Challenges.Weapons.SMG_CriticalHitKills",
+   "name": "High Rate of Ire",
+   "category": "SMG",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1844,
+   "id_text": "GD_Challenges.Weapons.Sniper_CriticalHitKills",
+   "name": "Snipe Hunting",
+   "category": "Sniper Rifle",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1845,
+   "id_text": "GD_Challenges.Weapons.AssaultRifle_CriticalHitKills",
+   "name": "...This Is My Gun",
+   "category": "Assault Rifle",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1858,
+   "id_text": "GD_Challenges.Economy.Economy_MoneySaved",
+   "name": "For the Hoard!",
+   "category": "Money and Trading",
+   "dlc": 0,
+   "levels": [
+    10000,
+    50000,
+    250000,
+    1000000,
+    3000000
+   ]
+  },
+  {
+   "id": 1859,
+   "id_text": "GD_Challenges.Economy.General_MoneyFromCashDrops",
+   "name": "Dolla Dolla Bills, Y'all",
+   "category": "Money and Trading",
+   "dlc": 0,
+   "levels": [
+    5000,
+    25000,
+    125000,
+    500000,
+    1000000
+   ]
+  },
+  {
+   "id": 1860,
+   "id_text": "GD_Challenges.Economy.Economy_PurchaseItemsOfTheDay",
+   "name": "Limited-Time Offer",
+   "category": "Money and Trading",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1865,
+   "id_text": "GD_Challenges.Player.Player_SecondWind",
+   "name": "I'll Just Help Myself",
+   "category": "Health and Recovery",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1866,
+   "id_text": "GD_Challenges.Player.Player_SecondWindFromBadass",
+   "name": "Badass Bingo",
+   "category": "Health and Recovery",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1868,
+   "id_text": "GD_Challenges.Player.Player_CoopRevivesOfFriends",
+   "name": "This Is No Time for Lazy!",
+   "category": "Health and Recovery",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1869,
+   "id_text": "GD_Challenges.Weapons.Launcher_KillsDirectHit",
+   "name": "Catch-a-Rocket!",
+   "category": "Rocket Launcher",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1870,
+   "id_text": "GD_Challenges.Weapons.Launcher_KillsSplashDamage",
+   "name": "Splish Splash",
+   "category": "Rocket Launcher",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1871,
+   "id_text": "GD_Challenges.Weapons.Launcher_KillsFullShieldEnemy",
+   "name": "Shield Basher",
+   "category": "Rocket Launcher",
+   "dlc": 0,
+   "levels": [
+    5,
+    15,
+    35,
+    75,
+    125
+   ]
+  },
+  {
+   "id": 1872,
+   "id_text": "GD_Challenges.Weapons.SniperRifle_KillsFullShieldEnemy",
+   "name": "Eviscerated",
+   "category": "Sniper Rifle",
+   "dlc": 0,
+   "levels": [
+    5,
+    15,
+    35,
+    75,
+    125
+   ]
+  },
+  {
+   "id": 1873,
+   "id_text": "GD_Challenges.elemental.Elemental_SetEnemiesOnFire",
+   "name": "Cowering Inferno",
+   "category": "Elemental",
+   "dlc": 0,
+   "levels": [
+    25,
+    100,
+    400,
+    1000,
+    2000
+   ]
+  },
+  {
+   "id": 1877,
+   "id_text": "GD_Challenges.elemental.Elemental_DealFireDOTDamage",
+   "name": "I Just Want to Set the World on Fire",
+   "category": "Elemental",
+   "dlc": 0,
+   "levels": [
+    2500,
+    20000,
+    100000,
+    500000,
+    1000000
+   ]
+  },
+  {
+   "id": 1878,
+   "id_text": "GD_Challenges.elemental.Elemental_DealCorrosiveDOTDamage",
+   "name": "Corroderate",
+   "category": "Elemental",
+   "dlc": 0,
+   "levels": [
+    2500,
+    20000,
+    100000,
+    500000,
+    1000000
+   ]
+  },
+  {
+   "id": 1879,
+   "id_text": "GD_Challenges.elemental.Elemental_DealShockDOTDamage",
+   "name": "Say \"Watt\" Again",
+   "category": "Elemental",
+   "dlc": 0,
+   "levels": [
+    5000,
+    20000,
+    100000,
+    500000,
+    1000000
+   ]
+  },
+  {
+   "id": 1880,
+   "id_text": "GD_Challenges.elemental.Elemental_DealBonusSlagDamage",
+   "name": "Slag-Licked",
+   "category": "Elemental",
+   "dlc": 0,
+   "levels": [
+    5000,
+    25000,
+    150000,
+    1000000,
+    5000000
+   ]
+  },
+  {
+   "id": 1881,
+   "id_text": "GD_Challenges.Weapons.SniperRifle_KillsUnaware",
+   "name": "Surprise!",
+   "category": "Sniper Rifle",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1883,
+   "id_text": "GD_Challenges.Grenades.Grenade_KillsAoEoTType",
+   "name": "Chemical Sprayer",
+   "category": "Grenades",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1884,
+   "id_text": "GD_Challenges.Grenades.Grenade_KillsBouncing",
+   "name": "Whoa, Black Betty",
+   "category": "Grenades",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1885,
+   "id_text": "GD_Challenges.Grenades.Grenade_KillsMirvType",
+   "name": "EXPLOOOOOSIONS!",
+   "category": "Grenades",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1886,
+   "id_text": "GD_Challenges.Grenades.Grenade_KillsSingularityType",
+   "name": "Singled Out",
+   "category": "Grenades",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1889,
+   "id_text": "GD_Challenges.Shields.Shields_KillsNova",
+   "name": "Super Novas",
+   "category": "Shields",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1890,
+   "id_text": "GD_Challenges.Shields.Shields_KillsRoid",
+   "name": "Roid Rage",
+   "category": "Shields",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1891,
+   "id_text": "GD_Challenges.Shields.Shields_KillsSpikes",
+   "name": "Game of Thorns",
+   "category": "Shields",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1892,
+   "id_text": "GD_Challenges.Shields.Shields_KillsImpact",
+   "name": "Amp It Up",
+   "category": "Shields",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1893,
+   "id_text": "GD_Challenges.Melee.Melee_KillsBladed",
+   "name": "A Squall of Violence",
+   "category": "Melee",
+   "dlc": 0,
+   "levels": [
+    20,
+    75,
+    250,
+    600,
+    1000
+   ]
+  },
+  {
+   "id": 1895,
+   "id_text": "GD_Challenges.enemies.Enemies_ShootBullymongProjectiles",
+   "name": "Hurly Burly",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    50,
+    125,
+    250
+   ]
+  },
+  {
+   "id": 1896,
+   "id_text": "GD_Challenges.enemies.Enemies_ReleaseChainedMidgets",
+   "name": "Short-Chained",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    1,
+    5,
+    15,
+    30,
+    50
+   ]
+  },
+  {
+   "id": 1898,
+   "id_text": "GD_Challenges.Pickups.Inventory_PickupWhiteItems",
+   "name": "Another Man's Treasure",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    50,
+    125,
+    250,
+    400,
+    600
+   ]
+  },
+  {
+   "id": 1899,
+   "id_text": "GD_Challenges.Pickups.Inventory_PickupGreenItems",
+   "name": "It's Not Easy Looting Green",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    20,
+    50,
+    75,
+    125,
+    200
+   ]
+  },
+  {
+   "id": 1900,
+   "id_text": "GD_Challenges.Pickups.Inventory_PickupBlueItems",
+   "name": "I Like My Treasure Rare",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    5,
+    12,
+    20,
+    30,
+    45
+   ]
+  },
+  {
+   "id": 1901,
+   "id_text": "GD_Challenges.Pickups.Inventory_PickupPurpleItems",
+   "name": "Purple Reign",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    2,
+    4,
+    7,
+    12,
+    20
+   ]
+  },
+  {
+   "id": 1902,
+   "id_text": "GD_Challenges.Pickups.Inventory_PickupOrangeItems",
+   "name": "Nothing Rhymes with Orange",
+   "category": "Loot",
+   "dlc": 0,
+   "levels": [
+    1,
+    3,
+    6,
+    10,
+    15
+   ]
+  },
+  {
+   "id": 1908,
+   "id_text": "GD_Challenges.GeneralCombat.Tediore_KillWithReload",
+   "name": "Boomerbang",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1909,
+   "id_text": "GD_Challenges.GeneralCombat.Tediore_DamageFromReloads",
+   "name": "Gun Slinger",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    5000,
+    20000,
+    100000,
+    500000,
+    1000000
+   ]
+  },
+  {
+   "id": 1912,
+   "id_text": "GD_Challenges.GeneralCombat.Barrels_KillEnemies",
+   "name": "Not Full of Monkeys",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    45,
+    70,
+    100
+   ]
+  },
+  {
+   "id": 1915,
+   "id_text": "GD_Challenges.GeneralCombat.Kills_AtDay",
+   "name": "Afternoon Delight",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    50,
+    250,
+    1000,
+    2500,
+    5000
+   ]
+  },
+  {
+   "id": 1916,
+   "id_text": "GD_Challenges.GeneralCombat.Kills_AtNight",
+   "name": "...I Got to Boogie",
+   "category": "General Combat",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    150,
+    300,
+    750
+   ]
+  },
+  {
+   "id": 1917,
+   "id_text": "GD_Challenges.Player.Player_PointsHealed",
+   "name": "Heal Plz",
+   "category": "Health and Recovery",
+   "dlc": 0,
+   "levels": [
+    1000,
+    25000,
+    150000,
+    1000000,
+    5000000
+   ]
+  },
+  {
+   "id": 1918,
+   "id_text": "GD_Challenges.Grenades.Grenade_KillsTransfusionType",
+   "name": "Health Vampire",
+   "category": "Grenades",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1919,
+   "id_text": "GD_Challenges.Vehicles.Vehicles_KillsWhilePassenger",
+   "name": "Passive Aggressive",
+   "category": "Vehicle",
+   "dlc": 0,
+   "levels": [
+    1,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1920,
+   "id_text": "GD_Challenges.Vehicles.Vehicles_KillByPowerSlide",
+   "name": "Blue Sparks",
+   "category": "Vehicle",
+   "dlc": 0,
+   "levels": [
+    5,
+    15,
+    30,
+    50,
+    75
+   ]
+  },
+  {
+   "id": 1922,
+   "id_text": "GD_Challenges.Vehicles.Vehicles_VehicleKillsVehicle",
+   "name": "...One Van Leaves",
+   "category": "Vehicle",
+   "dlc": 0,
+   "levels": [
+    5,
+    10,
+    50,
+    100,
+    200
+   ]
+  },
+  {
+   "id": 1930,
+   "id_text": "GD_Challenges.Shields.Shields_AbsorbAmmo",
+   "name": "Ammo Eater",
+   "category": "Shields",
+   "dlc": 0,
+   "levels": [
+    20,
+    75,
+    250,
+    600,
+    1000
+   ]
+  },
+  {
+   "id": 1934,
+   "id_text": "GD_Challenges.enemies.Enemies_KillBruisers",
+   "name": "Cruising for a Bruising",
+   "category": "Enemies",
+   "dlc": 0,
+   "levels": [
+    10,
+    25,
+    75,
+    150,
+    300
+   ]
+  },
+  {
+   "id": 1940,
+   "id_text": "GD_Challenges.Miscellaneous.Misc_JimmyJenkins",
+   "name": "JEEEEENKINSSSSSS!!!",
+   "category": "Miscellaneous",
+   "dlc": 0,
+   "levels": [
+    1,
+    3,
+    6,
+    10,
+    15
+   ]
+  },
+  {
+   "id": 1949,
+   "id_text": "GD_Iris_Challenges.Challenges.Challenge_Iris_BuyTorgueItems",
+   "name": "Torgue Items Purchased",
+   "category": "Campaign of Carnage",
+   "dlc": 3,
+   "levels": [
+    2,
+    5,
+    8,
+    12,
+    15
+   ]
+  },
+  {
+   "id": 1950,
+   "id_text": "GD_Iris_Challenges.Challenges.Challenge_Iris_TorgueTokens",
+   "name": "Torgue Tokens Acquired",
+   "category": "Campaign of Carnage",
+   "dlc": 3,
+   "levels": [
+    100,
+    250,
+    500,
+    750,
+    1000
+   ]
+  },
+  {
+   "id": 1952,
+   "id_text": "GD_Sage_Challenges.Challenges.Challenge_Sage_KillBoroks",
+   "name": "Boroking Around",
+   "category": "Hammerlock's Hunt",
+   "dlc": 4,
+   "levels": [
+    10,
+    20,
+    50,
+    80,
+    120
+   ]
+  },
+  {
+   "id": 1953,
+   "id_text": "GD_Sage_Challenges.Challenges.Challenge_Sage_KillScaylions",
+   "name": "Stinging Sensation",
+   "category": "Hammerlock's Hunt",
+   "dlc": 4,
+   "levels": [
+    10,
+    20,
+    50,
+    80,
+    120
+   ]
+  },
+  {
+   "id": 1954,
+   "id_text": "GD_Aster_Challenges.Challenges.Challenge_Aster_KillDwarves",
+   "name": "Scot-Free",
+   "category": "Dragon Keep",
+   "dlc": 9,
+   "levels": [
+    50,
+    100,
+    150,
+    200,
+    250
+   ]
+  }
+ ]
+}

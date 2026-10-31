@@ -20,6 +20,7 @@ import threading
 from typing import Any, Optional
 
 from config import get_config
+import bl2_stats
 
 _cfg = get_config()
 if _cfg["borderlands2_tool_dir"]:
@@ -314,6 +315,9 @@ def _write_save_locked(filename: str, player: dict[int, Any], warn_only_validati
 
     # Pre-write validation
     validate_items(player, warn_only=warn_only_validation)
+    _guard_challenge_registry(path, player)
+    if 15 in player and player[15]:
+        bl2_stats.unpack_stats(bytes(player[15][0][1]))  # stats blob must decode
 
     # Rotate backups before writing
     _rotate_backups(path)
@@ -1067,17 +1071,9 @@ def unlock_achievements(filename: str) -> dict[str, Any]:
         player[18][0][1] = write_protobuf(pt_data)
     changes["missions_completed"] = missions_completed
 
-    # 4. Complete all challenges
-    challenges_completed = 0
-    for entry in player.get(38, []):
-        sub = read_protobuf(entry[1])
-        old_completed = sub[3][0][1] if 3 in sub else 0
-        if old_completed < 1:
-            sub[2] = [[0, 99999]]
-            sub[3] = [[0, 1]]
-            entry[1] = write_protobuf(sub)
-            challenges_completed += 1
-    changes["challenges_completed"] = challenges_completed
+    # 4. Complete all challenges (progress lives in field 15; field 38 is
+    #    read-only DLC metadata and must not be modified)
+    changes["challenges_completed"] = _complete_all_in_player(player)
 
     # 5. Unlock all base + DLC fast travel stations
     existing_stations = set()
@@ -1407,90 +1403,178 @@ def _format_challenge_name(path: str) -> str:
     return name
 
 
-def extract_challenges(player: dict[int, Any]) -> dict[str, Any]:
-    """Extract challenge data from field 38, grouped by category."""
-    categories = {}
+def _challenge_registry(player: dict[int, Any]) -> dict[str, Any]:
+    """Field 38 is the challenge *registry*: {1: name, 2: is_from_dlc, 3: dlc_id}.
+    Sub-fields 2/3 are read-only DLC metadata the game uses to attribute
+    stats; they must never be rewritten (doing so loses ECHO/boss records).
+    Returns {name: [(is_from_dlc, dlc_id), ...]}."""
+    reg: dict[str, Any] = {}
     for entry in player.get(38, []):
-        sub = read_protobuf(entry[1])
-        path = ""
-        if 1 in sub:
-            raw = sub[1][0][1]
-            path = raw.decode("latin1") if isinstance(raw, bytes) else str(raw)
-        progress = sub[2][0][1] if 2 in sub else 0
-        completed = sub[3][0][1] if 3 in sub else 0
-        # Determine category from path
-        parts = path.split(".")
-        cat_key = parts[1] if len(parts) > 1 else "Other"
-        cat_display = CHALLENGE_CATEGORIES.get(cat_key, cat_key)
-        categories.setdefault(cat_display, []).append({
-            "path": path,
-            "display_name": _format_challenge_name(path),
-            "category": cat_display,
-            "progress": progress,
-            "completed_count": completed,
-        })
+        try:
+            sub = read_protobuf(entry[1])
+        except Exception:
+            continue
+        name = sub[1][0][1] if 1 in sub else b""
+        if isinstance(name, (bytes, bytearray)):
+            name = bytes(name).decode("latin1")
+        meta = (sub[2][0][1] if 2 in sub else None, sub[3][0][1] if 3 in sub else None)
+        reg.setdefault(str(name), []).append(meta)
+    return reg
+
+
+def _guard_challenge_registry(path: str, player: dict[int, Any]) -> None:
+    """Refuse to write if any field 38 entry's DLC metadata (sub-fields 2/3)
+    differs from the save on disk (i.e. the save that was loaded)."""
+    if not os.path.exists(path):
+        return
+    with open(path, "rb") as f:
+        on_disk = read_protobuf(BaseApp.unwrap_player_data(f.read()))
+    before = _challenge_registry(on_disk)
+    after = _challenge_registry(player)
+    changed = [n for n in before if n in after and before[n] != after[n]]
+    if changed:
+        raise ValueError(
+            "Refusing to write: challenge registry (field 38) DLC metadata changed for "
+            f"{len(changed)} entr{'y' if len(changed) == 1 else 'ies'} (e.g. {changed[0]}). "
+            "This would corrupt ECHO/boss/challenge records.")
+
+
+def _load_stats(player: dict[int, Any]) -> Optional[dict[str, Any]]:
+    if 15 not in player or not player[15]:
+        return None
+    return bl2_stats.unpack_stats(bytes(player[15][0][1]))
+
+
+def _store_stats(player: dict[int, Any], stats: dict[str, Any]) -> None:
+    packed = bl2_stats.pack_stats(stats)
+    bl2_stats.unpack_stats(packed)  # sanity: must re-decode cleanly
+    player[15][0] = [2, packed]
+
+
+def extract_challenges(player: dict[int, Any]) -> dict[str, Any]:
+    """Extract challenge progress from the StatsData blob (field 15), grouped
+    by category. Only stats with a known challenge definition are listed;
+    other stats (ECHO pickups, boss kills, area data, ...) are preserved
+    untouched. Field 38 is reported only as read-only registry metadata."""
+    categories: dict[str, list] = {}
+    defs = bl2_stats.challenge_defs()
+    stats = None
+    error = None
+    try:
+        stats = _load_stats(player)
+    except bl2_stats.StatsFormatError as e:
+        error = str(e)
+    other = 0
+    if stats:
+        for e in stats["entries"]:
+            d = defs.get(e["id"])
+            if d is None:
+                other += 1
+                continue
+            value = bl2_stats.current_value(e)
+            levels = d["levels"]
+            lvl = bl2_stats.level_reached(value, levels)
+            next_goal = next((t for t in levels if value < t), None)
+            categories.setdefault(d["category"], []).append({
+                "id": e["id"],
+                "path": d["id_text"],
+                "display_name": d["name"],
+                "category": d["category"],
+                "progress": value,
+                "level": lvl,
+                "max_level": len(levels),
+                "next_goal": next_goal,
+                "goal": levels[-1],
+                "completed": lvl >= len(levels),
+                "completed_count": lvl,
+            })
+    reg = _challenge_registry(player)
+    dlc_counts: dict[str, int] = {}
+    for metas in reg.values():
+        for is_dlc, dlc_id in metas:
+            key = "base" if not is_dlc else f"dlc_{dlc_id}"
+            dlc_counts[key] = dlc_counts.get(key, 0) + 1
     return {
         "categories": categories,
-        "total": len(player.get(38, [])),
+        "total": sum(len(v) for v in categories.values()),
+        "other_stats": other,
+        "registry": {"count": len(player.get(38, [])), "by_dlc": dlc_counts, "read_only": True},
+        "error": error,
     }
 
 
-def set_challenge_progress(filename: str, challenge_path: str,
-                           progress: int, completed: int) -> bool:
-    """Set a single challenge's progress and completion count."""
+def _edit_known_stats(player: dict[int, Any], fn) -> int:
+    """Apply fn(entry, definition) -> bool(changed) to every stat that has a
+    known challenge definition. Unknown stats are never touched."""
+    stats = _load_stats(player)
+    if stats is None:
+        return 0
+    defs = bl2_stats.challenge_defs()
+    count = 0
+    for e in stats["entries"]:
+        d = defs.get(e["id"])
+        if d is not None and fn(e, d):
+            count += 1
+    if count:
+        _store_stats(player, stats)
+    return count
+
+
+def _complete_all_in_player(player: dict[int, Any]) -> int:
+    def fn(e, d):
+        goal = d["levels"][-1]
+        if bl2_stats.current_value(e) >= goal:
+            return False
+        bl2_stats.set_current_value(e, goal)
+        return True
+    return _edit_known_stats(player, fn)
+
+
+def set_challenge_progress(filename: str, challenge: Any, progress: int) -> bool:
+    """Set a challenge's current progress (field 15). `challenge` is the stat
+    id (int) or the challenge path (e.g. GD_Challenges.Weapons.Pistol_Kills)."""
     _, player = read_save(filename)
-    if 38 not in player:
+    stats = _load_stats(player)
+    if stats is None:
         return False
-    for entry in player[38]:
-        sub = read_protobuf(entry[1])
-        path = ""
-        if 1 in sub:
-            raw = sub[1][0][1]
-            path = raw.decode("latin1") if isinstance(raw, bytes) else str(raw)
-        if path == challenge_path:
-            sub[2] = [[0, max(0, int(progress))]]
-            sub[3] = [[0, max(0, int(completed))]]
-            entry[1] = write_protobuf(sub)
+    defs = bl2_stats.challenge_defs()
+    target = None
+    if isinstance(challenge, int) or (isinstance(challenge, str) and challenge.isdigit()):
+        target = int(challenge)
+    else:
+        target = next((i for i, d in defs.items() if d["id_text"] == challenge), None)
+    if target is None or target not in defs:
+        return False
+    for e in stats["entries"]:
+        if e["id"] == target:
+            bl2_stats.set_current_value(e, progress)
+            _store_stats(player, stats)
             write_save(filename, player)
             return True
     return False
 
 
 def complete_all_challenges(filename: str) -> int:
-    """Mark all challenges as completed with high progress. Returns count changed.
-    BUG-32: sets progress=99999 instead of 1 so in-game display is realistic."""
+    """Raise every known challenge's progress to its final level goal (field
+    15). Field 38 and unknown stats are left untouched. Returns count changed."""
     _, player = read_save(filename)
-    if 38 not in player:
-        return 0
-    count = 0
-    for entry in player[38]:
-        sub = read_protobuf(entry[1])
-        old_completed = sub[3][0][1] if 3 in sub else 0
-        if old_completed < 1:
-            sub[2] = [[0, 99999]]
-            sub[3] = [[0, 1]]
-            entry[1] = write_protobuf(sub)
-            count += 1
+    count = _complete_all_in_player(player)
     if count > 0:
         write_save(filename, player)
     return count
 
 
 def reset_all_challenges(filename: str) -> int:
-    """Reset all challenges to 0 progress. Returns count changed."""
+    """Reset known challenges to zero the way the game does: previous_value is
+    set to total_value (lifetime total kept). ECHO/boss/other stats untouched."""
     _, player = read_save(filename)
-    if 38 not in player:
-        return 0
-    count = 0
-    for entry in player[38]:
-        sub = read_protobuf(entry[1])
-        progress = sub[2][0][1] if 2 in sub else 0
-        completed = sub[3][0][1] if 3 in sub else 0
-        if progress > 0 or completed > 0:
-            sub[2] = [[0, 0]]
-            sub[3] = [[0, 0]]
-            entry[1] = write_protobuf(sub)
-            count += 1
+
+    def fn(e, d):
+        if bl2_stats.current_value(e) == 0:
+            return False
+        e["previous_value"] = e["total_value"]
+        return True
+    count = _edit_known_stats(player, fn)
     if count > 0:
         write_save(filename, player)
     return count

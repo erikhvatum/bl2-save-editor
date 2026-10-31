@@ -3612,7 +3612,12 @@ function renderChallenges(data) {
         list.innerHTML = '<div style="color:var(--text-dim);padding:20px">No challenge data</div>';
         return;
     }
-    countEl.textContent = data.total + " challenges";
+    countEl.textContent = data.total + " challenges" +
+        (data.registry ? " (registry: " + data.registry.count + ", read-only)" : "");
+    if (data.error) {
+        list.innerHTML = '<div style="color:var(--text-dim);padding:20px">Challenge stats unreadable: ' + esc(data.error) + '</div>';
+        return;
+    }
     var html = "";
     var cats = Object.keys(data.categories).sort();
     for (var ci = 0; ci < cats.length; ci++) {
@@ -3626,10 +3631,11 @@ function renderChallenges(data) {
         html += '<div class="challenge-cat-body" data-cat-body="' + ci + '" style="display:none">';
         for (var i = 0; i < challenges.length; i++) {
             var ch = challenges[i];
-            var done = ch.completed_count > 0;
+            var done = !!ch.completed;
             html += '<div class="challenge-row' + (done ? ' is-complete' : '') + '">';
             html += '<span class="challenge-name">' + esc(ch.display_name) + '</span>';
-            html += '<span class="challenge-progress">' + ch.progress + '</span>';
+            html += '<span class="challenge-progress">' + ch.progress + ' / ' + ch.goal +
+                ' (Lv ' + ch.level + '/' + ch.max_level + ')</span>';
             html += '<span class="challenge-badge ' + (done ? 'badge-done' : 'badge-open') + '">' +
                 (done ? 'DONE' : 'OPEN') + '</span>';
             html += '</div>';
@@ -3672,7 +3678,7 @@ document.getElementById("btn-complete-all-challenges").addEventListener("click",
 document.getElementById("btn-reset-all-challenges").addEventListener("click", async function() {
     if (!currentFile) return;
     if (_mutating) return;
-    if (!confirm("Reset all challenges to zero?")) return;
+    if (!confirm("Reset all challenge progress to zero? (ECHO log and boss records are kept.)")) return;
     _mutating = true;
     try {
         var res = await api("/api/save/" + currentFile + "/challenges/reset-all", { method: "POST" });

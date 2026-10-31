@@ -1162,14 +1162,11 @@ def api_set_challenge(filename):
     """Set a single challenge's progress."""
     try:
         data = request.get_json()
-        path = data.get("path", "")
+        challenge = data.get("id", data.get("path", ""))
         progress = int(data.get("progress", 0))
-        completed = int(data.get("completed", 0))
-        if progress < 0 or progress > 999999:
-            return jsonify({"error": "Progress must be 0-999999"}), 400
-        if completed < 0 or completed > 999:
-            return jsonify({"error": "Completed count must be 0-999"}), 400
-        ok = save_io.set_challenge_progress(filename, path, progress, completed)
+        if progress < 0 or progress > 99999999:
+            return jsonify({"error": "Progress must be 0-99999999"}), 400
+        ok = save_io.set_challenge_progress(filename, challenge, progress)
         if not ok:
             return jsonify({"error": "Challenge not found"}), 404
         return jsonify({"ok": True})
@@ -1193,7 +1190,7 @@ def api_complete_all_challenges(filename):
 @validate_save_filename
 @require_game_not_running
 def api_reset_all_challenges(filename):
-    """Reset all challenges to zero."""
+    """Reset all known challenges to zero (ECHO/boss stats are preserved)."""
     try:
         count = save_io.reset_all_challenges(filename)
         return jsonify({"ok": True, "count": count})
