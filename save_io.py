@@ -612,6 +612,9 @@ def extract_character_info(player: dict[int, Any]) -> dict[str, Any]:
 def extract_skills(player: dict[int, Any]) -> dict[str, int]:
     """Extract skill allocations from player data."""
     skills = {}
+    char_class = player.get(1, [[2, b""]])[0][1]
+    canonical = ({path.casefold(): path for path in _class_skill_defs(char_class)}
+                 if char_class in CLASS_NAMES else {})
     if 8 not in player:
         return skills
     for entry in player[8]:
@@ -620,7 +623,7 @@ def extract_skills(player: dict[int, Any]) -> dict[str, int]:
         if isinstance(name, bytes):
             name = name.decode("latin1", errors="replace")
         level = sub[2][0][1] if 2 in sub else 0
-        skills[name] = level
+        skills[canonical.get(name.casefold(), name)] = level
     return skills
 
 
@@ -1580,25 +1583,161 @@ def reset_all_challenges(filename: str) -> int:
     return count
 
 
-def set_skills(filename: str, skill_updates: dict[str, int]) -> int:
-    """Set skill levels. skill_updates is {skill_path: level}."""
-    _, player = read_save(filename)
-    if 8 not in player:
-        return 0
-    count = 0
-    for entry in player[8]:
+# The save schema (borderlands/bl2.py) uses field 1 for class, 4 for
+# unspent points, and repeated field 8 / subfield 2 for purchased skill grades.
+CLASS_TREE_KEYS = dict(zip(CLASS_NAMES, (
+    "GD_Soldier", "GD_Assassin", "GD_Siren", "GD_Mercenary", "GD_Tulip", "GD_Lilac",
+)))
+CLASS_DEFAULT_CUSTOMS = dict(zip(CLASS_NAMES, (
+    "GD_DefaultCustoms_MainGame.Soldier",
+    "GD_DefaultCustoms_MainGame.Assassin",
+    "GD_DefaultCustoms_MainGame.Siren",
+    "GD_DefaultCustoms_MainGame.Mercenary",
+    "GD_DefaultCustoms_Tulip.Mechro",
+    "GD_DefaultCustoms_Lilac.Psycho",
+)))
+
+
+def _class_skill_defs(char_class: bytes) -> dict[str, int]:
+    """Purchaseable skill paths and maximum grades, shared with the UI."""
+    key = CLASS_TREE_KEYS.get(char_class)
+    if key is None:
+        raise ValueError("Unsupported character class")
+    with open(os.path.join(os.path.dirname(__file__), "static", "skill_trees.json")) as f:
+        tree = _json.load(f)[key]
+    result = {tree["action_skill"]["path"]: 1}
+    for branch in tree["trees"].values():
+        for skill in branch["skills"]:
+            if skill["max"] > 0:
+                result[skill["path"]] = skill["max"]
+    return result
+
+
+def _skill_entry(path: str, grade: int = 0) -> list:
+    return [2, write_protobuf({
+        1: [[2, path.encode("ascii")]], 2: [[0, grade]],
+        3: [[0, 0]], 4: [[0, 0]],
+    })]
+
+
+def _skill_path(sub: dict) -> str:
+    return sub.get(1, [[2, b""]])[0][1].decode("latin1")
+
+
+def _class_owns_skill(char_class: bytes, path: str) -> bool:
+    # Gaige's action lives in Mechromancer_Skills too; accept older editor
+    # DeathTrap package spelling so those points are not lost either.
+    root = CLASS_TREE_KEYS[char_class]
+    return path.casefold().startswith((root + "_").casefold())
+
+
+def _change_class_in_player(player: dict[int, Any], target: bytes) -> int:
+    """Refund old class grades (including action); new action is unpurchased.
+
+    This is deliberately not a level-based recalculation: preserve the existing
+    point budget even on edited saves. Class-mod bonuses are not purchased
+    grades and inventory records are never changed. Unrelated skills survive.
+    """
+    if target not in CLASS_NAMES:
+        raise ValueError("Unsupported character class")
+    old = player.get(1, [[2, b""]])[0][1]
+    if old == target:
+        return 0  # true no-op, no respec or cosmetic reset
+    if old not in CLASS_NAMES:
+        raise ValueError("Cannot safely convert an unsupported source class")
+    defs = _class_skill_defs(target)
+    refund = 0
+    retained = []
+    for entry in player.get(8, []):
         sub = read_protobuf(entry[1])
-        name = sub[1][0][1] if 1 in sub else b""
-        if isinstance(name, bytes):
-            name = name.decode("latin1", errors="replace")
-        if name in skill_updates:
-            new_level = max(0, int(skill_updates[name]))
-            sub[2] = [[0, new_level]]
-            entry[1] = write_protobuf(sub)
-            count += 1
-    if count > 0:
-        write_save(filename, player)
-    return count
+        path = _skill_path(sub)
+        if _class_owns_skill(old, path):
+            refund += max(0, sub.get(2, [[0, 0]])[0][1])
+        elif any(_class_owns_skill(c, path) for c in CLASS_NAMES):
+            # Unexpected mixed-class saves need manual review, not silent loss.
+            raise ValueError("Save contains skills from another class; cannot safely convert")
+        else:
+            retained.append(entry)
+    points = player.get(4, [[0, 0]])[0][1] + refund
+    if not 0 <= points <= 0x7fffffff:
+        raise ValueError("Skill point total is outside the supported range")
+    player[1] = [[2, target]]
+    player[4] = [[0, points]]
+    player[8] = retained + [_skill_entry(path) for path in defs]
+    # Wearing indices 0 and 4 are class head/skin. Preserve vehicle skins,
+    # colors, inventory cosmetics, and any unknown trailing entries verbatim.
+    wearing = player.setdefault(35, [])
+    while len(wearing) < 5:
+        wearing.append([2, b"0"])
+    defaults = CLASS_DEFAULT_CUSTOMS[target]
+    wearing[0] = [2, (defaults + ".Head_Default").encode("ascii")]
+    wearing[4] = [2, (defaults + ".Skin_Default").encode("ascii")]
+    return refund
+
+
+def change_character_class(filename: str, class_name: str) -> dict[str, Any]:
+    """Change one save's class with point refund, backups, and write guards."""
+    if not isinstance(class_name, str):
+        raise ValueError("Choose a supported character class")
+    target = next((c for c, name in CLASS_NAMES.items()
+                   if class_name in (name, c.decode("ascii"))), None)
+    if target is None:
+        raise ValueError("Choose a supported character class")
+    with _get_file_lock(filename):
+        _, player = read_save(filename)
+        changed = player.get(1, [[2, b""]])[0][1] != target
+        refund = _change_class_in_player(player, target)
+        if changed:
+            _write_save_locked(filename, player)
+        warnings = []
+        if changed:
+            warnings.append("Class mods remain unchanged, including equipped mods; old-class mods may be unusable. Unequip or replace them in game.")
+            warnings.append("Head and skin reset to the new class defaults. The new action skill starts at 0; spend one refunded point to unlock it.")
+            if CLASS_NAMES[target] in ("Gaige", "Krieg"):
+                warnings.append("This class requires the Mechromancer/Psycho DLC on the platform where you play; ownership is not checked by the editor.")
+        return {"character": extract_character_info(player), "refunded_points": refund,
+                "changed": changed, "warnings": warnings}
+
+
+def set_skills(filename: str, skill_updates: dict[str, int]) -> int:
+    """Apply purchased-grade deltas to field 4, not a level-derived budget."""
+    if not isinstance(skill_updates, dict):
+        raise ValueError("Skills must be a path-to-grade object")
+    with _get_file_lock(filename):
+        _, player = read_save(filename)
+        defs = _class_skill_defs(player.get(1, [[2, b""]])[0][1])
+        canonical = {path.casefold(): path for path in defs}
+        updates = {}
+        for path, grade in skill_updates.items():
+            key = canonical.get(path.casefold()) if isinstance(path, str) else None
+            if key is None or type(grade) is not int or not 0 <= grade <= defs[key]:
+                raise ValueError("Invalid skill path or grade")
+            updates[key.casefold()] = (key, grade)
+        entries = {}
+        for entry in player.get(8, []):
+            sub = read_protobuf(entry[1])
+            key = _skill_path(sub).casefold()
+            if key in entries and key in updates:
+                raise ValueError("Duplicate skill records; cannot safely edit")
+            entries[key] = (entry, sub)
+        delta = 0
+        for key, (path, grade) in updates.items():
+            old = entries[key][1].get(2, [[0, 0]])[0][1] if key in entries else 0
+            delta += grade - old
+        points = player.get(4, [[0, 0]])[0][1] - delta
+        if not 0 <= points <= 0x7fffffff:
+            raise ValueError("Not enough unspent skill points")
+        for key, (path, grade) in updates.items():
+            if key in entries:
+                entry, sub = entries[key]
+                sub[2] = [[0, grade]]
+                entry[1] = write_protobuf(sub)
+            else:
+                player.setdefault(8, []).append(_skill_entry(path, grade))
+        if updates:
+            player[4] = [[0, points]]
+            _write_save_locked(filename, player)
+        return len(updates)
 
 
 def extract_inventory(player: dict[int, Any]) -> dict[str, list[dict[str, Any]]]:

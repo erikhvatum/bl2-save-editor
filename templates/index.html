@@ -213,6 +213,21 @@
                             <h2>SKILL TREES</h2>
                             <span id="skill-points-remaining" style="font-size:12px;color:var(--accent);margin-left:10px"></span>
                         </div>
+                        <div style="padding:12px 16px">
+                            <label for="char-class-select">CHARACTER CLASS</label>
+                            <select id="char-class-select" aria-label="New character class">
+                                <option value="Axton">Axton / Commando</option>
+                                <option value="Maya">Maya / Siren</option>
+                                <option value="Zer0">Zer0 / Assassin</option>
+                                <option value="Salvador">Salvador / Gunzerker</option>
+                                <option value="Gaige">Gaige / Mechromancer (DLC)</option>
+                                <option value="Krieg">Krieg / Psycho (DLC)</option>
+                            </select>
+                            <button id="btn-change-class" class="btn-secondary">CHANGE CLASS &amp; REFUND SKILLS</button>
+                            <p style="font-size:12px;color:var(--text-dim)">Refunds all old-class skill grades, including the action skill, to available points.
+                            New skills start at zero. Head/skin reset; class mods are kept and may be unusable.
+                            Gaige and Krieg require their DLC. Changes apply immediately; close the game first.</p>
+                        </div>
                         <div id="skill-tree-container" class="skill-tree-container"></div>
                         <div id="skill-tree-empty" class="hidden" style="text-align:center;padding:40px 0;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:14px">
                             No skill data available for this character.

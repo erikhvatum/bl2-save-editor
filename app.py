@@ -462,6 +462,21 @@ def api_update_character(filename):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/save/<filename>/class", methods=["POST"])
+@validate_save_filename
+@require_game_not_running
+def api_change_class(filename):
+    try:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Expected a JSON object"}), 400
+        return jsonify(save_io.change_character_class(filename, data.get("class")))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/save/<filename>/skills", methods=["POST"])
 @validate_save_filename
 @require_game_not_running
@@ -471,6 +486,8 @@ def api_set_skills(filename):
         skills = data.get("skills", {})
         count = save_io.set_skills(filename, skills)
         return jsonify({"ok": True, "count": count})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -926,6 +926,7 @@ const REQUIRED_XP = [
 
 function renderCharacter(c) {
     document.getElementById("char-class-badge").textContent = c.class_name;
+    document.getElementById("char-class-select").value = c.class_name;
     const h = Math.floor(c.time_played / 3600);
     const m = Math.floor((c.time_played % 3600) / 60);
     document.getElementById("char-playtime").textContent = "Time played: " + h + "h " + m + "m";
@@ -1012,6 +1013,58 @@ function getClassPrefix(charClassStr) {
 
 // ── Skill Icon Mapping ──
 var _SKILL_ICON = {
+    "GD_Lilac_Skills_Hellborn.Skills.HellfireHalitosis":"SkillIcon-Psycho27",
+    "GD_Lilac_Skills_Hellborn.Skills.FireFiend":"SkillIcon-Psycho29",
+    "GD_Lilac_Skills_Hellborn.Skills.FuelTheFire":"SkillIcon-Psycho22",
+    "GD_Lilac_Skills_Mania.Skills.ThrillOfTheKill":"SkillIcon-Psycho16",
+    "GD_Lilac_Skills_Mania.Skills.EmbraceThePain":"SkillIcon-Psycho13",
+    "GD_Lilac_Skills_Mania.Skills.EmptyRage":"SkillIcon-Psycho11",
+    "GD_Lilac_Skills_Bloodlust.Skills.Bloodsplosion":"SkillIcon-Psycho10",
+    "GD_Lilac_Skills_Bloodlust.Skills.BoilingBlood":"SkillIcon-Psycho09",
+    "GD_Lilac_Skills_Bloodlust.Skills.BloodBath":"SkillIcon-Psycho06",
+    "GD_Lilac_Skills_Bloodlust.Skills.BloodyTwitch":"SkillIcon-Psycho02",
+    "GD_Lilac_Skills_Bloodlust.Skills.BloodfilledGuns":"SkillIcon-Psycho01",
+    "GD_Lilac_SkillsBase.ActionSkill.Skill_Psycho":"AAIcon-PsychoAA_I1",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.WithClaws":"SkillIcon-Mechro06",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.TheNthDegree":"SkillIcon-Mechro34",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.DeathFromAbove":"SkillIcon-Mechro14",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.RationalAnarchist":"SkillIcon-Mechro33",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.TypecastIconoclast":"SkillIcon-Mechro32",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.Discord":"SkillIcon-Mechro31",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.BloodSoakedShields":"SkillIcon-Mechro30",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.RobotRampage":"SkillIcon-Mechro23",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.PreshrunkCyberpunk":"SkillIcon-Mechro26",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.Anarchy":"SkillIcon-Mechro11",
+    "GD_Tulip_Mechromancer_Skills.EmbraceChaos.SmallerLighterFaster":"SkillIcon-Mechro17",
+    "GD_Tulip_Mechromancer_Skills.LittleBigTrouble.InterspersedOutburst":"SkillIcon-Mechro36",
+    "GD_Tulip_Mechromancer_Skills.LittleBigTrouble.OneTwoBoom":"SkillIcon-Mechro28",
+    "GD_Tulip_Mechromancer_Skills.LittleBigTrouble.ElectricalBurn":"SkillIcon-Mechro38",
+    "GD_Tulip_Mechromancer_Skills.LittleBigTrouble.StrengthOfFiveGorillas":"SkillIcon-Mechro02",
+    "GD_Tulip_Mechromancer_Skills.LittleBigTrouble.ShockStorm":"SkillIcon-Mechro12",
+    "GD_Tulip_Mechromancer_Skills.Action.Skill_DeathTrap":"AAIcon-MechroAA_I1",
+    "GD_Mercenary_Skills.Brawn.BusThatCantSlowDown":"SkillIcon-BusCantStop",
+    "GD_Mercenary_Skills.Brawn.AintGotTimeToBleed":"SkillIcon-NoTimeToBleed",
+    "GD_Mercenary_Skills.Brawn.ImTheJuggernaut":"SkillIcon-ImTheJuggernaut",
+    "GD_Mercenary_Skills.Brawn.Diehard":"SkillIcon-Asbestos",
+    "GD_Mercenary_Skills.Rampage.KeepFiring":"SkillIcon-KeepFiring",
+    "GD_Mercenary_Skills.Rampage.5Shotsor6":"SkillIcon-5Shots",
+    "GD_Mercenary_Skills.Rampage.LastLonger":"SkillIcon-Diehard",
+    "GD_Mercenary_Skills.Rampage.FilledtotheBrim":"SkillIcon-FilledToTheBrim",
+    "GD_Mercenary_Skills.Gun_Lust.NoKillLikeOverkill":"SkillIcon-NoKillLikeOverkill",
+    "GD_Mercenary_Skills.Gun_Lust.KeepItPipingHot":"SkillIcon-KeepItPipingHot",
+    "GD_Mercenary_Skills.Gun_Lust.LayWaste":"SkillIcon-LayWaste",
+    "GD_Mercenary_Skills.Gun_Lust.MoneyShot":"SkillIcon-MoneyShot",
+    "GD_Mercenary_Skills.Gun_Lust.AutoLoader":"SkillIcon-AutoLoader",
+    "GD_Mercenary_Skills.Gun_Lust.AllIneedIsOne":"SkillIcon-AllINeedIsOne",
+    "GD_Mercenary_Skills.Gun_Lust.QuickDraw":"SkillIcon-QuickDraw",
+    "GD_Mercenary_Skills.Gun_Lust.LockedandLoaded":"SkillIcon-LockedNLoaded",
+    "GD_Siren_Skills.Cataclysm.BlightPhoenix":"SkillIcon-BlightPhoenix",
+    "GD_Siren_Skills.Harmony.MindsEye":"SkillIcon-MindsEye",
+    "GD_Siren_Skills.Motion.ThoughtLock":"SkillIcon-ThoughtLock",
+    "GD_Assassin_Skills.Bloodshed.KillingBlow":"SkillIcon-Finisher",
+    "GD_Assassin_Skills.Cunning.Unforseen":"SkillIcon-Unforseen",
+    "GD_Assassin_Skills.Sniping.CriticalAscention":"SkillIcon-Escalation",
+    "GD_Assassin_Skills.Sniping.OneShotOneKill":"SkillIcon-OneShotOneKill",
     // ── Axton (Soldier) ──
     "GD_Soldier_Skills.Scorpio.Skill_Scorpio":"AAIcon-SoldierAA",
     "GD_Soldier_Skills.Guerrilla.Sentry":"SkillIcon-Sentry",
@@ -1252,15 +1305,6 @@ function renderSkillTree(c) {
         if (emptyMsg) emptyMsg.classList.add("hidden");
         _skillEdits = {};
         var skills = c.skills || {};
-        var totalAllocated = 0;
-        for (var sk in skills) totalAllocated += skills[sk];
-        var actionSkillPath = charTree.action_skill ? charTree.action_skill.path : "";
-        if (skills[actionSkillPath]) totalAllocated -= skills[actionSkillPath];
-
-        var maxPoints = Math.max(0, (c.level || 1) - 1);
-        document.getElementById("skill-points-remaining").textContent =
-            (c.skill_points || 0) + " unspent / " + totalAllocated + " allocated / " + maxPoints + " available";
-
         // Build skill metadata map for tooltips (avoids HTML-escaping issues in attributes)
         var _skillMeta = {};
 
@@ -1271,6 +1315,8 @@ function renderSkillTree(c) {
             html += '<div class="st-action-skill">';
             if (asIcon) html += '<img class="st-action-icon" src="' + asIcon + '" alt="">';
             html += '<span class="st-action-name">' + esc(charTree.action_skill.name) + '</span>';
+            html += '<button id="btn-toggle-action" class="btn-small">' +
+                ((skills[charTree.action_skill.path] || 0) ? 'REFUND ACTION SKILL (1)' : 'UNLOCK ACTION SKILL (1)') + '</button>';
             if (charTree.action_skill.description) html += '<span class="st-action-desc">' + esc(charTree.action_skill.description) + '</span>';
             html += '</div>';
         }
@@ -1322,6 +1368,15 @@ function renderSkillTree(c) {
         }
         html += '</div>';
         container.innerHTML = html;
+        var actionButton = document.getElementById("btn-toggle-action");
+        if (actionButton) actionButton.addEventListener("click", function() {
+            var path = charTree.action_skill.path;
+            var grade = Object.prototype.hasOwnProperty.call(_skillEdits, path) ? _skillEdits[path] : (skills[path] || 0);
+            _skillEdits[path] = grade ? 0 : 1;
+            this.textContent = _skillEdits[path] ? 'REFUND ACTION SKILL (1)' : 'UNLOCK ACTION SKILL (1)';
+            updateSkillPointsDisplay();
+        });
+        updateSkillPointsDisplay();
 
         // Wire click and tooltip handlers
         var tip = _ensureTooltip();
@@ -1388,22 +1443,46 @@ function updateSkillPointsDisplay() {
     if (!currentData || !currentData.character) return;
     var c = currentData.character;
     var skills = Object.assign({}, c.skills, _skillEdits);
-    var treeData = _skillTreeData;
-    var prefix = getClassPrefix(c.class);
-    var charTree = treeData && treeData[prefix];
-    var actionSkillPath = charTree && charTree.action_skill ? charTree.action_skill.path : "";
-
-    var totalAllocated = 0;
-    for (var sk in skills) {
-        if (sk === actionSkillPath) continue;
-        totalAllocated += skills[sk];
-    }
-    var maxPoints = Math.max(0, (c.level || 1) - 1);
-    var unspent = maxPoints - totalAllocated;
+    var totalAllocated = Object.values(skills).reduce(function(a, b) { return a + b; }, 0);
+    var delta = Object.keys(_skillEdits).reduce(function(total, path) {
+        return total + _skillEdits[path] - ((c.skills || {})[path] || 0);
+    }, 0);
+    var unspent = (c.skill_points || 0) - delta;
     document.getElementById("skill-points-remaining").textContent =
-        unspent + " unspent / " + totalAllocated + " allocated / " + maxPoints + " available";
+        unspent + " unspent / " + totalAllocated + " allocated (including action skill)";
     document.getElementById("skill-points-remaining").style.color = unspent < 0 ? "#e04040" : "var(--accent)";
 }
+
+document.getElementById("btn-change-class").addEventListener("click", async function() {
+    if (!currentFile || !currentData || _mutating) return;
+    var target = document.getElementById("char-class-select").value;
+    if (target === currentData.character.class_name) {
+        toast("Already that class; no changes made");
+        return;
+    }
+    var message = "Change to " + target + " now? All saved old-class skill points (including the action skill) will be refunded. " +
+        "New skills start at 0. Head/skin reset to defaults. Class mods stay, but old-class mods may be unusable. " +
+        "Unsaved editor changes will be discarded. Close the game before continuing.";
+    if (target === "Gaige" || target === "Krieg") message += " This class requires its DLC; ownership cannot be verified here.";
+    if (!confirm(message)) return;
+    _mutating = true;
+    this.disabled = true;
+    try {
+        var result = await api("/api/save/" + currentFile + "/class", {
+            method: "POST", body: {class: target}
+        });
+        _skillEdits = {};
+        await loadSave(currentFile);
+        await loadSaveList();
+        toast("Changed to " + target + "; refunded " + result.refunded_points + " skill points");
+    } catch (e) {
+        document.getElementById("char-class-select").value = currentData.character.class_name;
+        toast("Class change failed: " + e.message, "error");
+    } finally {
+        this.disabled = false;
+        _mutating = false;
+    }
+});
 
 document.getElementById("btn-save-skills").addEventListener("click", async function() {
     if (!currentFile || Object.keys(_skillEdits).length === 0) {
@@ -1433,7 +1512,7 @@ document.getElementById("btn-save-skills").addEventListener("click", async funct
 document.getElementById("btn-reset-skills").addEventListener("click", async function() {
     if (!currentData || !currentData.character) return;
     if (_mutating) return;
-    if (!confirm("Reset all skills to 0? (Action skill will keep 1 point)")) return;
+    if (!confirm("Reset all skills, including the action skill, and refund their points?")) return;
     var c = currentData.character;
     var treeData = await loadSkillTreeData();
     var prefix = getClassPrefix(c.class);
@@ -1449,9 +1528,9 @@ document.getElementById("btn-reset-skills").addEventListener("click", async func
             }
         }
     }
-    // Keep action skill at 1
+    // Refund the action skill too; it can be purchased again.
     if (charTree.action_skill) {
-        resets[charTree.action_skill.path] = 1;
+        resets[charTree.action_skill.path] = 0;
     }
 
     _mutating = true;

@@ -93,8 +93,36 @@ database.
 **Skill tree editor.** Full per-class skill tree visualization driven by
 `static/skill_trees.json`. Live counters for points unspent / allocated /
 available. Color-coded tree panels matching each character's in-game UI.
-Per-skill increment / decrement controls with rank validation against tier
-prerequisites. Respec by zeroing all skills and recovering points.
+Per-skill increment / decrement controls with rank-cap and available-point
+validation. The action skill can also be purchased/refunded. Respec by
+zeroing all skills and recovering points. Tier prerequisites are not enforced
+by the editor; allocate a legal build or distribute the points in game.
+
+**Change character class.** In the Skills tab, choose any of the six Vault
+Hunters and click **Change class & refund skills**. This applies immediately,
+uses the normal rotating backups, and discards unsaved UI edits. Close the
+game first. Every saved old-class skill grade is added to the existing unspent
+points (field 4), **including the one-point action skill**. This preserves the
+actual point budget, not a level-derived estimate; class-mod bonuses are not
+refunded. All new-class grades, including the action skill, start at zero;
+spend one point to unlock the action skill in the editor or in game. Repeated
+switches cannot manufacture points, and selecting the same class is a no-op.
+
+Head and skin switch to the new class's defaults; vehicle skins, colors,
+inventory, equipped items and class mods are preserved. Old-class mods may
+be unusable: unequip/replace them in game. Gaige/Mechromancer and Krieg/Psycho
+require their DLC on the platform where you play; the editor cannot verify
+ownership. Unknown source classes or mixed-class skill saves are rejected.
+Challenge stats and DLC metadata (fields 15/38) are untouched, and the
+field-38 write guard remains active. Conversion is covered by synthetic tests
+and save round-trips, but has not been tested in game.
+
+The shared skill definitions also correct previously invalid paths, missing
+skills, and rank caps, needed to initialize a usable new tree. Identifiers
+were checked against the bundled save schema, Gibbed's `Player Classes.json`
+and `Customizations.json`, a real Mechromancer save, and public
+[BLCM skill references](https://github.com/BLCM/BLCMods/tree/master/Borderlands%202%20mods).
+No game assets or private saves are added.
 
 **Gibbed integration.** Import `BL2(...)` codes from forums, Reddit, Discord.
 Export individual items or the entire inventory as Gibbed codes. Drop-in
