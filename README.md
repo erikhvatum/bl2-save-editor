@@ -313,3 +313,16 @@ ownership and terms. This project is not affiliated with Gearbox or 2K.
 ## Contact
 
 Killian Miller — killianmiller6@gmail.com — github.com/KillianM00
+
+### Account profile and class changes
+
+Use **ACCOUNT / PROFILE** in the sidebar (or the **Account** tab) to edit per-class
+heads/skins, Badass Rank and invested bonus tokens, golden keys, and FOV. Account
+changes affect every character, require explicit confirmation, and create
+`profile.bin.bak` backups. Keep Borderlands 2 closed while editing.
+
+The Skills tab's class-change action can also add corresponding account heads,
+first matching mission/drop/theme counterparts, then source rarity, then seeded
+random unowned heads. Existing unlocks count and are never removed; skins are not
+transferred. A result report shows each mapping. See [profile format and safety
+notes](PROFILE_FORMAT.md) for supported fields, source data, and limitations.

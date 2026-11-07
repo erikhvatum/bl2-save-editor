@@ -1460,21 +1460,38 @@ document.getElementById("btn-change-class").addEventListener("click", async func
         toast("Already that class; no changes made");
         return;
     }
+    var unlockHeads = document.getElementById("class-unlock-heads").checked;
     var message = "Change to " + target + " now? All saved old-class skill points (including the action skill) will be refunded. " +
         "New skills start at 0. Head/skin reset to defaults. Class mods stay, but old-class mods may be unusable. " +
         "Unsaved editor changes will be discarded. Close the game before continuing.";
     if (target === "Gaige" || target === "Krieg") message += " This class requires its DLC; ownership cannot be verified here.";
+    message += unlockHeads ? " This also writes account-wide profile.bin, adding matching heads without removing existing unlocks; both files receive backups." : " Account-wide heads will NOT be updated.";
     if (!confirm(message)) return;
     _mutating = true;
     this.disabled = true;
     try {
         var result = await api("/api/save/" + currentFile + "/class", {
-            method: "POST", body: {class: target}
+            method: "POST", body: {class: target, unlock_heads: unlockHeads, confirm_profile_write: unlockHeads, head_seed: 0}
         });
         _skillEdits = {};
         await loadSave(currentFile);
         await loadSaveList();
         toast("Changed to " + target + "; refunded " + result.refunded_points + " skill points");
+        var report = document.getElementById("class-change-head-results");
+        report.replaceChildren();
+        var summary = document.createElement("p");
+        summary.textContent = result.heads ? "Account heads: " + result.heads.unlocked_count + " unlocked; " +
+            result.heads.target_owned_before + " → " + result.heads.target_owned_after + " owned for " + target : "Account profile unchanged.";
+        report.appendChild(summary);
+        (result.heads ? result.heads.mappings : []).forEach(function(row) {
+            var line = document.createElement("div");
+            line.textContent = row.source + " → " + (row.target || "No remaining head") + " [" + row.tier +
+                (row.already_owned ? "; already owned" : "; unlocked") + "]";
+            report.appendChild(line);
+        });
+        (result.warnings || []).forEach(function(warning) {
+            var line = document.createElement("p"); line.textContent = warning; report.appendChild(line);
+        });
     } catch (e) {
         document.getElementById("char-class-select").value = currentData.character.class_name;
         toast("Class change failed: " + e.message, "error");
@@ -2411,12 +2428,13 @@ document.addEventListener("keydown", e => {
     }
 
     // Ctrl+S: save active tab (Project Paris Bug 2 — was always saving character)
-    if (e.ctrlKey && e.key === "s") {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         var activeMainTab = document.querySelector(".main-tab.active");
         var tabKey = activeMainTab ? activeMainTab.dataset.mtab : "character";
         var saveBtn = null;
-        if (tabKey === "skills") saveBtn = document.getElementById("btn-save-skills");
+        if (tabKey === "profile") saveBtn = document.getElementById("btn-profile-save");
+        else if (tabKey === "skills") saveBtn = document.getElementById("btn-save-skills");
         else if (tabKey === "fasttravel") saveBtn = document.getElementById("btn-save-ft");
         else saveBtn = document.getElementById("btn-save-char");
         if (saveBtn) saveBtn.click();

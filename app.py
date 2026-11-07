@@ -470,7 +470,11 @@ def api_change_class(filename):
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify({"error": "Expected a JSON object"}), 400
-        return jsonify(save_io.change_character_class(filename, data.get("class")))
+        unlock_heads = data.get("unlock_heads", False)
+        if unlock_heads and data.get("confirm_profile_write") is not True:
+            return jsonify({"error": "Explicit confirmation is required to update account-wide profile.bin"}), 400
+        return jsonify(save_io.change_character_class(filename, data.get("class"),
+                                                     unlock_heads, data.get("head_seed", 0)))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -1307,6 +1311,32 @@ def _find_free_port(start=5000, end=5010):
             except OSError:
                 continue
     return start
+
+
+@app.route("/api/profile", methods=["GET"])
+def api_read_profile():
+    try:
+        return jsonify(save_io.read_account_profile())
+    except FileNotFoundError:
+        return jsonify({"error": "profile.bin was not found in the configured save directory"}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/profile", methods=["POST"])
+@require_game_not_running
+def api_update_profile():
+    try:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or data.get("confirm_profile_write") is not True:
+            return jsonify({"error": "Explicit confirmation is required to write account-wide profile.bin"}), 400
+        return jsonify(save_io.update_account_profile(data.get("changes"), data.get("revision")))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "profile.bin was not found in the configured save directory"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

@@ -1,0 +1,183 @@
+{
+  "source_url": "https://www.gamerguides.com/borderlands-2/guide/extras/character-customization/heads",
+  "source_title": "Gamer Guides, Heads \u2014 Character Customization (Jarrod Garripoli)",
+  "notes": [
+    "Source locations were read directly from the guide, not search synthesis.",
+    "Guide spelling Galiant Grunt/Till Death/Gear is normalized to Gibbed Gallant Grunt/Til Death/Geary.",
+    "Challenge reward uses the mission/reward tier. Named-enemy drops use rare/boss tier; these are source categories, not measured drop rates.",
+    "Other DLC/pack tiers use verified catalog pack metadata as a proxy, not an asserted enemy-drop rarity."
+  ],
+  "tiers": {
+    "0": "default",
+    "1": "mission or challenge reward",
+    "2": "common/general enemy drop",
+    "3": "rare/named boss drop",
+    "4": "DLC/pack/promotion"
+  },
+  "groups": [
+    {
+      "group": "boss_vermivorous",
+      "tier": 3,
+      "heads": {
+        "Axton": "Bone Blinder",
+        "Maya": "Kawaii Killer",
+        "Salvador": "Superduperfly",
+        "Zer0": "G4l4h4d",
+        "Gaige": "Lovely Corpse",
+        "Krieg": "HAHAHAHAHAH"
+      }
+    },
+    {
+      "group": "boss_henry",
+      "tier": 3,
+      "heads": {
+        "Axton": "Dapper Gent",
+        "Maya": "Til Death Do Us Part",
+        "Salvador": "Rasta-nefarious",
+        "Zer0": "Raz0r",
+        "Gaige": "Metal Blood",
+        "Krieg": "I CAN'T BREATHE IN THIS"
+      }
+    },
+    {
+      "group": "challenge_to_pay_the_bills",
+      "tier": 1,
+      "heads": {
+        "Axton": "Gallant Grunt",
+        "Maya": "Admiral Asskick",
+        "Salvador": "Pistola",
+        "Zer0": "Nihilism",
+        "Gaige": "Mecha Wrecka",
+        "Krieg": "MY MIND IS A PRISON"
+      }
+    },
+    {
+      "group": "mission_symbiosis",
+      "tier": 1,
+      "heads": {
+        "Axton": "Grizzled Veteran",
+        "Maya": "One-Eye Spy",
+        "Salvador": "A Sense of Dread",
+        "Zer0": "Blast Shield",
+        "Gaige": "Read All About It",
+        "Krieg": "STAY IN SCHOOL KIDS"
+      }
+    },
+    {
+      "group": "boss_jack_warrior_sorcerer",
+      "tier": 3,
+      "heads": {
+        "Axton": "Handsome Jack's Mask",
+        "Maya": "Handsome Jack's Mask",
+        "Salvador": "Handsome Jack's Mask",
+        "Zer0": "Handsome Jack's Mask",
+        "Gaige": "Handsome Jack's Mask",
+        "Krieg": "GO TO HELL DIE DIE DIE"
+      }
+    },
+    {
+      "group": "boss_geary_warrior",
+      "tier": 3,
+      "heads": {
+        "Axton": "Medic Mantis",
+        "Maya": "Metal Fear",
+        "Salvador": "Marshall Mustache",
+        "Zer0": "Alienati0n",
+        "Gaige": "Fragger",
+        "Krieg": "I HEAR YOUR BLOOD"
+      }
+    },
+    {
+      "group": "boss_badass_creeper",
+      "tier": 3,
+      "heads": {
+        "Axton": "Mine But Not Yours",
+        "Maya": "Creeper Slayer",
+        "Salvador": "Tree Puncher",
+        "Zer0": "Crafty",
+        "Gaige": "Pig Rider",
+        "Krieg": "VIDEOGAMEFACE"
+      }
+    },
+    {
+      "group": "mission_in_memoriam",
+      "tier": 1,
+      "heads": {
+        "Axton": "Roguish Renegade",
+        "Maya": "Nevermore",
+        "Salvador": "Bowler Badass",
+        "Zer0": "Punk",
+        "Gaige": "Speak No Evil",
+        "Krieg": "COMING FOR YOU"
+      }
+    },
+    {
+      "group": "drop_badass_enemy",
+      "tier": 2,
+      "heads": {
+        "Axton": "Sandblaster",
+        "Maya": "Alkaline Mistress",
+        "Salvador": "Wizened Warrior",
+        "Zer0": "M0t0cross Marauder",
+        "Krieg": "DOUBLE SUPLEX TIME"
+      }
+    },
+    {
+      "group": "boss_terramorphous",
+      "tier": 3,
+      "heads": {
+        "Axton": "Shadaloo Stylish",
+        "Maya": "Cold Steel",
+        "Salvador": "Boatmurderer",
+        "Zer0": "C0al Train",
+        "Gaige": "XXX",
+        "Krieg": "HELL OF AN UNDERBITE"
+      }
+    },
+    {
+      "group": "boss_bnk3r",
+      "tier": 3,
+      "heads": {
+        "Axton": "Space Knight",
+        "Maya": "Shrapnel Slayer",
+        "Salvador": "The Baron",
+        "Zer0": "Unreality",
+        "Gaige": "Digitized Death",
+        "Krieg": "LOOK IN MY EYE DAMMIT"
+      }
+    },
+    {
+      "group": "mission_statuesque",
+      "tier": 1,
+      "heads": {
+        "Axton": "The Hawk",
+        "Maya": "A Crying Shame",
+        "Salvador": "Top Card",
+        "Zer0": "3ng13",
+        "Gaige": "Sinful Sweetheart",
+        "Krieg": "LONG LIVE THE MEAT"
+      }
+    },
+    {
+      "group": "customizationset_orchid",
+      "tier": 4,
+      "heads": {
+        "Krieg": "KEELHAUL YOUR INFANT"
+      }
+    },
+    {
+      "group": "customizationset_iris",
+      "tier": 4,
+      "heads": {
+        "Krieg": "ZEN AND THE ART OF MEAT"
+      }
+    },
+    {
+      "group": "customizationset_sage",
+      "tier": 4,
+      "heads": {
+        "Krieg": "MASKS MAKE ME LOOK FAT"
+      }
+    }
+  ]
+}

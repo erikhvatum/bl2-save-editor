@@ -34,6 +34,7 @@
         <!-- ═══ Sidebar ═══ -->
         <aside id="sidebar">
             <div class="sidebar-header">VAULT HUNTERS</div>
+            <button id="btn-open-account" class="btn-secondary">ACCOUNT / PROFILE</button>
             <div id="save-list"></div>
         </aside>
 
@@ -76,6 +77,7 @@
                     <button class="main-tab" data-mtab="fasttravel"><span class="mtab-key">5</span> FAST TRAVEL</button>
                     <button class="main-tab" data-mtab="challenges"><span class="mtab-key">6</span> CHALLENGES</button>
                     <button class="main-tab" data-mtab="achievements"><span class="mtab-key">7</span> ACHIEVEMENTS</button>
+                    <button class="main-tab" data-mtab="profile">ACCOUNT</button>
                 </div>
 
                 <!-- ── Tab 1: Character ── -->
@@ -223,11 +225,13 @@
                                 <option value="Gaige">Gaige / Mechromancer (DLC)</option>
                                 <option value="Krieg">Krieg / Psycho (DLC)</option>
                             </select>
+                            <label class="profile-option"><input type="checkbox" id="class-unlock-heads" checked> Also update account-wide profile.bin with equivalent heads (backup created)</label>
                             <button id="btn-change-class" class="btn-secondary">CHANGE CLASS &amp; REFUND SKILLS</button>
                             <p style="font-size:12px;color:var(--text-dim)">Refunds all old-class skill grades, including the action skill, to available points.
                             New skills start at zero. Head/skin reset; class mods are kept and may be unusable.
                             Gaige and Krieg require their DLC. Changes apply immediately; close the game first.</p>
                         </div>
+                        <div id="class-change-head-results" class="profile-results" role="status"></div>
                         <div id="skill-tree-container" class="skill-tree-container"></div>
                         <div id="skill-tree-empty" class="hidden" style="text-align:center;padding:40px 0;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:14px">
                             No skill data available for this character.
@@ -237,6 +241,38 @@
                             <button id="btn-reset-skills" class="btn-secondary">RESET ALL</button>
                             <span id="skill-save-status" style="font-size:11px;color:var(--text-dim)"></span>
                         </div>
+                    </section>
+                </div>
+
+                <div class="main-tab-content" id="mtab-profile">
+                    <section class="panel profile-panel">
+                        <h2>ACCOUNT-WIDE PROFILE</h2>
+                        <p>Edits profile.bin for ALL characters, not just this save. Close the game first.
+                        Writes create rotating .bak backups. Unknown records, stash and settings are preserved.</p>
+                        <button id="btn-profile-load" class="btn-secondary">RELOAD PROFILE</button>
+                        <button id="btn-profile-save" class="btn-primary" disabled>SAVE ACCOUNT CHANGES</button>
+                        <p id="profile-status" role="status"></p>
+                        <div id="profile-fields" class="profile-grid"></div>
+                        <h3>BADASS BONUSES</h3>
+                        <p>Edit invested token counts, not arbitrary percentages. Percentages are calculated as tokens^0.75.
+                        Changing bonus/token counts also updates earned tokens. Rank is independently editable.</p>
+                        <div id="profile-bonuses" class="profile-grid"></div>
+                        <h3>GOLDEN KEYS</h3>
+                        <p>Available keys per existing source. Used-key counts and unknown sources remain intact.</p>
+                        <div id="profile-keys" class="profile-grid"></div>
+                        <h3>HEADS &amp; SKINS</h3>
+                        <div class="profile-toolbar">
+                            <select id="profile-class" aria-label="Customization class">
+                                <option>Axton</option><option>Maya</option><option>Zer0</option>
+                                <option>Salvador</option><option>Gaige</option><option>Krieg</option>
+                            </select>
+                            <select id="profile-kind" aria-label="Customization type"><option value="head">Heads</option><option value="skin">Skins</option></select>
+                            <input id="profile-search" placeholder="Search names" aria-label="Search customizations">
+                            <span id="profile-custom-count"></span>
+                        </div>
+                        <p>Checked = owned. Changes stay pending until Save. Defaults and entitlement-only packs are read-only;
+                        pack ownership is not stored here. DLC must be owned. Class-change compensation affects HEADS ONLY.</p>
+                        <div id="profile-customizations" class="profile-grid"></div>
                     </section>
                 </div>
 
@@ -652,6 +688,7 @@
     </div>
 
     <script src="/static/viewer3d.js?v=11"></script>
-    <script src="/static/app.js?v=6"></script>
+    <script src="/static/app.js?v=7"></script>
+    <script src="/static/profile.js?v=1"></script>
 </body>
 </html>

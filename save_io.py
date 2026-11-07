@@ -17,7 +17,10 @@ import hashlib
 import binascii
 import logging
 import threading
+import tempfile
+from contextlib import nullcontext
 from typing import Any, Optional
+from pathlib import Path
 
 from config import get_config
 import bl2_stats
@@ -1675,7 +1678,8 @@ def _change_class_in_player(player: dict[int, Any], target: bytes) -> int:
     return refund
 
 
-def change_character_class(filename: str, class_name: str) -> dict[str, Any]:
+def change_character_class(filename: str, class_name: str, unlock_heads: bool = False,
+                           head_seed: int = 0) -> dict[str, Any]:
     """Change one save's class with point refund, backups, and write guards."""
     if not isinstance(class_name, str):
         raise ValueError("Choose a supported character class")
@@ -1683,20 +1687,34 @@ def change_character_class(filename: str, class_name: str) -> dict[str, Any]:
                    if class_name in (name, c.decode("ascii"))), None)
     if target is None:
         raise ValueError("Choose a supported character class")
-    with _get_file_lock(filename):
+    if type(unlock_heads) is not bool or type(head_seed) is not int:
+        raise ValueError("Head unlock option must be boolean and seed must be an integer")
+    import profile_io
+    profile_path = _profile_path()
+    with _get_file_lock(filename), (_get_file_lock(profile_path) if unlock_heads else nullcontext()):
         _, player = read_save(filename)
-        changed = player.get(1, [[2, b""]])[0][1] != target
+        old = player.get(1, [[2, b""]])[0][1]
+        changed = old != target
         refund = _change_class_in_player(player, target)
-        if changed:
+        heads = None
+        if changed and unlock_heads:
+            profile = profile_io.Profile.decode(Path(profile_path).read_bytes())
+            heads = profile_io.transfer_heads(profile, CLASS_NAMES[old], CLASS_NAMES[target], head_seed)
+            _write_class_and_profile(filename, player, profile_path, profile)
+        elif changed:
             _write_save_locked(filename, player)
         warnings = []
         if changed:
             warnings.append("Class mods remain unchanged, including equipped mods; old-class mods may be unusable. Unequip or replace them in game.")
             warnings.append("Head and skin reset to the new class defaults. The new action skill starts at 0; spend one refunded point to unlock it.")
+            if heads:
+                warnings.extend(heads['warnings'])
+            else:
+                warnings.append("Profile head compensation was not selected; account unlocks were not changed.")
             if CLASS_NAMES[target] in ("Gaige", "Krieg"):
                 warnings.append("This class requires the Mechromancer/Psycho DLC on the platform where you play; ownership is not checked by the editor.")
         return {"character": extract_character_info(player), "refunded_points": refund,
-                "changed": changed, "warnings": warnings}
+                "changed": changed, "warnings": warnings, "heads": heads}
 
 
 def set_skills(filename: str, skill_updates: dict[str, int]) -> int:
@@ -2321,3 +2339,103 @@ def delete_loadout(loadout_file: str) -> bool:
         os.remove(path)
         return True
     return False
+
+
+# Account profile operations share one lock across ALL character saves.
+def _profile_path() -> str:
+    return os.path.realpath(os.path.join(SAVE_DIR, "profile.bin"))
+
+
+def _stage_bytes(path: str, data: bytes) -> str:
+    fd, staged = tempfile.mkstemp(prefix=".bl2-profile-", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        if os.path.exists(path):
+            os.chmod(staged, os.stat(path).st_mode & 0o777)
+        return staged
+    except BaseException:
+        os.unlink(staged)
+        raise
+
+
+def _write_profile_locked(path, profile):
+    encoded = profile.encode()  # includes SHA-1 and semantic verification
+    if Path(path).read_bytes() != profile.original:
+        raise ValueError("Profile changed externally; reload before saving")
+    if encoded == profile.original:
+        return False
+    staged = _stage_bytes(path, encoded)
+    try:
+        _rotate_backups(path)
+        if Path(path).read_bytes() != profile.original:
+            raise ValueError("Profile changed externally during write; reload before saving")
+        os.replace(staged, path)
+    finally:
+        if os.path.exists(staged):
+            os.unlink(staged)
+    return True
+
+
+def _write_class_and_profile(filename, player, profile_path, profile):
+    """Stage/verify account changes first, retaining save guards and both backups.
+
+    Two files cannot be atomically renamed as a pair. Roll back the save on a
+    handled profile-write failure; a power loss between renames still requires
+    restoring the .bak pair. No-write profile plans leave profile.bin untouched.
+    """
+    encoded = profile.encode()
+    if encoded == profile.original:
+        _write_save_locked(filename, player)
+        return
+    if Path(profile_path).read_bytes() != profile.original:
+        raise ValueError("Profile changed externally; reload before changing class")
+    save_path = os.path.join(SAVE_DIR, filename)
+    original_save = Path(save_path).read_bytes()
+    # Preflight before rotating either backup; field-38 guard stays mandatory.
+    validate_items(player)
+    _guard_challenge_registry(save_path, player)
+    staged = _stage_bytes(profile_path, encoded)
+    attempted = False
+    try:
+        _rotate_backups(profile_path)
+        attempted = True
+        _write_save_locked(filename, player)
+        if Path(profile_path).read_bytes() != profile.original:
+            raise ValueError("Profile changed externally during class change; save rolled back")
+        os.replace(staged, profile_path)
+    except BaseException:
+        if attempted:
+            rollback = _stage_bytes(save_path, original_save)
+            os.replace(rollback, save_path)
+        raise
+    finally:
+        if os.path.exists(staged):
+            os.unlink(staged)
+
+
+def read_account_profile():
+    import profile_io
+    path = _profile_path()
+    with _get_file_lock(path):
+        original = Path(path).read_bytes()
+        view = profile_io.account_view(profile_io.Profile.decode(original))
+        view['revision'] = hashlib.sha1(original).hexdigest()
+        return view
+
+
+def update_account_profile(changes, revision):
+    import profile_io
+    path = _profile_path()
+    with _get_file_lock(path):
+        original = Path(path).read_bytes()
+        if not isinstance(revision, str) or revision != hashlib.sha1(original).hexdigest():
+            raise ValueError("Profile changed or revision missing; reload before saving")
+        profile = profile_io.Profile.decode(original)
+        profile_io.apply_account_patch(profile, changes)
+        changed = _write_profile_locked(path, profile)
+        view = profile_io.account_view(profile)
+        view['revision'] = hashlib.sha1(profile.encode()).hexdigest()
+        return {'changed': changed, 'profile': view}
